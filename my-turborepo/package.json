@@ -9,9 +9,13 @@
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
+    "@vitest/ui": "^4.0.8",
+    "happy-dom": "^20.0.10",
+    "patch-package": "^8.0.1",
     "prettier": "^3.6.2",
     "turbo": "^2.6.0",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vitest": "^4.0.8"
   },
   "engines": {
     "node": ">=18"

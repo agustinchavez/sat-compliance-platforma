@@ -41,7 +41,7 @@ export default async function AdminDashboardPage() {
             </div>
             <div>
               <p className="text-sm text-gray-600">User ID</p>
-              <p className="font-mono text-xs">{currentUser.userId.slice(0, 8)}...</p>
+              <p className="font-mono text-xs">{currentUser.id.slice(0, 8)}...</p>
             </div>
           </div>
         </div>
