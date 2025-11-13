@@ -26,20 +26,41 @@ CREATE INDEX IF NOT EXISTS idx_organizations_plan
   ON organizations(plan)
   WHERE deleted_at IS NULL;
 
--- Add check constraints
-ALTER TABLE organizations
-  ADD CONSTRAINT IF NOT EXISTS check_rfc_length
-  CHECK (char_length(rfc) BETWEEN 12 AND 13);
+-- Add check constraints (using DO blocks for IF NOT EXISTS support)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'check_rfc_length'
+  ) THEN
+    ALTER TABLE organizations
+      ADD CONSTRAINT check_rfc_length
+      CHECK (char_length(rfc) BETWEEN 12 AND 13);
+  END IF;
+END $$;
 
-ALTER TABLE organizations
-  ADD CONSTRAINT IF NOT EXISTS check_plan_values
-  CHECK (plan IN ('free', 'basic', 'professional', 'enterprise'));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'check_plan_values'
+  ) THEN
+    ALTER TABLE organizations
+      ADD CONSTRAINT check_plan_values
+      CHECK (plan IN ('free', 'basic', 'professional', 'enterprise'));
+  END IF;
+END $$;
 
-ALTER TABLE organizations
-  ADD CONSTRAINT IF NOT EXISTS check_subscription_status_values
-  CHECK (subscription_status IS NULL OR subscription_status IN (
-    'active', 'trialing', 'past_due', 'canceled', 'unpaid', 'incomplete'
-  ));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'check_subscription_status_values'
+  ) THEN
+    ALTER TABLE organizations
+      ADD CONSTRAINT check_subscription_status_values
+      CHECK (subscription_status IS NULL OR subscription_status IN (
+        'active', 'trialing', 'past_due', 'canceled', 'unpaid', 'incomplete'
+      ));
+  END IF;
+END $$;
 
 -- ============================================
 -- ORGANIZATION AUDIT LOG
@@ -168,7 +189,8 @@ COMMENT ON VIEW organization_setup_status IS 'Shows setup completion status for 
 ALTER TABLE organization_audit_log ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can view audit logs for their own organization
-CREATE POLICY IF NOT EXISTS "Users can view their organization audit logs"
+DROP POLICY IF EXISTS "Users can view their organization audit logs" ON organization_audit_log;
+CREATE POLICY "Users can view their organization audit logs"
   ON organization_audit_log
   FOR SELECT
   USING (
@@ -178,7 +200,8 @@ CREATE POLICY IF NOT EXISTS "Users can view their organization audit logs"
   );
 
 -- Policy: System can insert audit logs
-CREATE POLICY IF NOT EXISTS "System can insert audit logs"
+DROP POLICY IF EXISTS "System can insert audit logs" ON organization_audit_log;
+CREATE POLICY "System can insert audit logs"
   ON organization_audit_log
   FOR INSERT
   WITH CHECK (true);
