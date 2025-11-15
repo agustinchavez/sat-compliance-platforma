@@ -557,6 +557,57 @@ export async function sendOwnershipTransferNotification(
 }
 
 /**
+ * Send ownership transfer confirmed email
+ *
+ * @param data - Email data with organization and new owner info
+ * @returns Email send result
+ */
+export async function sendOwnershipTransferConfirmed(data: {
+  to_email: string;
+  to_name: string;
+  organization_name: string;
+  new_owner_name: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const resend = getResendClient();
+    const config = getEmailConfig();
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; line-height: 1.6; color: #333;">
+  <p>Hi ${data.to_name},</p>
+  <p>The ownership transfer for <strong>${data.organization_name}</strong> has been completed.</p>
+  <p><strong>${data.new_owner_name}</strong> is now the owner of the organization.</p>
+  <p style="margin-top: 20px;">If you have any questions, please contact support.</p>
+  <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">This is an automated notification from your SAT Compliance Platform.</p>
+</body>
+</html>
+    `.trim();
+
+    const result = await resend.emails.send({
+      from: `${config.fromName} <${config.from}>`,
+      to: data.to_email,
+      subject: `Ownership transfer completed for ${data.organization_name}`,
+      html,
+    });
+
+    if (result.error) {
+      console.error('Failed to send ownership transfer confirmed email:', result.error);
+      return { success: false, error: result.error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending ownership transfer confirmed email:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
  * Send notification when new team member joins
  *
  * @param orgName - Organization name

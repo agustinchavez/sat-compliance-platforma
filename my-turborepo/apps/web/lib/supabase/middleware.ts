@@ -35,24 +35,33 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Define public routes that don't require authentication
-  const publicRoutes = ['/login', '/signup', '/verify-email', '/forgot-password', '/auth']
-  const isPublicRoute = publicRoutes.some(route =>
-    request.nextUrl.pathname.startsWith(route)
+  const pathname = request.nextUrl.pathname
+
+  // Define auth routes (login, signup, etc.)
+  const authRoutes = ['/login', '/signup', '/verify-email', '/forgot-password']
+  const isAuthRoute = authRoutes.some(route =>
+    pathname === route || pathname.startsWith(route + '/')
   )
 
-  // Redirect to login if not authenticated and trying to access protected route
-  if (!user && !isPublicRoute && request.nextUrl.pathname !== '/') {
+  // Define public routes that don't require authentication
+  const publicRoutes = ['/', ...authRoutes, '/auth']
+  const isPublicRoute = publicRoutes.some(route =>
+    pathname === route || pathname.startsWith(route + '/')
+  )
+
+  // If authenticated and trying to access auth pages (login/signup), redirect to dashboard
+  // BUT: Don't redirect if it's the auth callback
+  if (user && isAuthRoute && !pathname.startsWith('/auth/callback')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    url.searchParams.set('redirect', request.nextUrl.pathname)
+    url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 
-  // Redirect to dashboard if authenticated and trying to access auth pages
-  if (user && isPublicRoute && !request.nextUrl.pathname.startsWith('/auth/callback')) {
+  // Redirect to login if not authenticated and trying to access protected route
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = '/login'
+    url.searchParams.set('redirect', pathname)
     return NextResponse.redirect(url)
   }
 

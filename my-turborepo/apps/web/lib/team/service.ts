@@ -261,8 +261,31 @@ export async function updateTeamMemberRole(
     }
 
     // For now, use the first org (in a real app, this would come from context/session)
-    const organizationId = changerMemberships[0].organization_id;
-    const changerRole = changerMemberships[0].role;
+    if (!changerMemberships || changerMemberships.length === 0) {
+      return {
+        success: false,
+        error: 'User is not a member of any organization',
+        user_id: request.user_id,
+        old_role: request.old_role,
+        new_role: request.new_role,
+        message: 'Failed to update role',
+      };
+    }
+
+    const changerMembership = changerMemberships[0];
+    if (!changerMembership) {
+      return {
+        success: false,
+        error: 'Invalid membership data',
+        user_id: request.user_id,
+        old_role: request.old_role,
+        new_role: request.new_role,
+        message: 'Failed to update role',
+      };
+    }
+
+    const organizationId = changerMembership.organization_id;
+    const changerRole = changerMembership.role;
 
     // 2. Get target user's membership in this organization
     const { data: targetMembership } = await supabase

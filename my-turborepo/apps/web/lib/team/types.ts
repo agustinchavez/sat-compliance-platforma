@@ -335,6 +335,18 @@ export interface TeamActivityLog {
   ip_address: string | null;
   user_agent: string | null;
   created_at: Date;
+
+  // Joined user data (populated when querying with joins)
+  user?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
+  target_user?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
 }
 
 /**
