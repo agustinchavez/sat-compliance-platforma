@@ -52,41 +52,73 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 
 -- ============================================
+-- Add SAT Integration Columns (if not exists)
+-- ============================================
+-- This handles existing tables that don't have SAT columns
+
+DO $$
+BEGIN
+  -- Add sat_validated column if it doesn't exist
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'customers' AND column_name = 'sat_validated'
+  ) THEN
+    ALTER TABLE customers ADD COLUMN sat_validated BOOLEAN NOT NULL DEFAULT false;
+  END IF;
+
+  -- Add last_sat_validation column if it doesn't exist
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'customers' AND column_name = 'last_sat_validation'
+  ) THEN
+    ALTER TABLE customers ADD COLUMN last_sat_validation TIMESTAMP;
+  END IF;
+
+  -- Add sat_metadata column if it doesn't exist
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'customers' AND column_name = 'sat_metadata'
+  ) THEN
+    ALTER TABLE customers ADD COLUMN sat_metadata JSONB;
+  END IF;
+END $$;
+
+-- ============================================
 -- Indexes for Performance
 -- ============================================
 
 -- Organization scoping (most common query)
-CREATE INDEX idx_customers_org ON customers(organization_id)
+CREATE INDEX IF NOT EXISTS idx_customers_org ON customers(organization_id)
   WHERE deleted_at IS NULL;
 
 -- RFC lookup (unique identifier)
-CREATE INDEX idx_customers_rfc ON customers(rfc)
+CREATE INDEX IF NOT EXISTS idx_customers_rfc ON customers(rfc)
   WHERE deleted_at IS NULL;
 
 -- Active customers filter
-CREATE INDEX idx_customers_active ON customers(is_active, organization_id)
+CREATE INDEX IF NOT EXISTS idx_customers_active ON customers(is_active, organization_id)
   WHERE deleted_at IS NULL;
 
 -- Tax regime filter
-CREATE INDEX idx_customers_regime ON customers(tax_regime)
+CREATE INDEX IF NOT EXISTS idx_customers_regime ON customers(tax_regime)
   WHERE deleted_at IS NULL;
 
 -- CFDI use filter
-CREATE INDEX idx_customers_cfdi_use ON customers(cfdi_use)
+CREATE INDEX IF NOT EXISTS idx_customers_cfdi_use ON customers(cfdi_use)
   WHERE deleted_at IS NULL;
 
 -- Tags search (GIN index for array operations)
-CREATE INDEX idx_customers_tags ON customers USING gin(tags);
+CREATE INDEX IF NOT EXISTS idx_customers_tags ON customers USING gin(tags);
 
 -- Created date sorting
-CREATE INDEX idx_customers_created ON customers(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_customers_created ON customers(created_at DESC);
 
 -- Updated date sorting
-CREATE INDEX idx_customers_updated ON customers(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_customers_updated ON customers(updated_at DESC);
 
 -- Full-text search index (Spanish language)
 -- Searches across legal_name, business_name, and RFC
-CREATE INDEX idx_customers_search ON customers
+CREATE INDEX IF NOT EXISTS idx_customers_search ON customers
   USING gin(
     to_tsvector('spanish',
       legal_name || ' ' ||
@@ -96,7 +128,7 @@ CREATE INDEX idx_customers_search ON customers
   );
 
 -- SAT validation status (Phase 2)
-CREATE INDEX idx_customers_sat_validated ON customers(sat_validated)
+CREATE INDEX IF NOT EXISTS idx_customers_sat_validated ON customers(sat_validated)
   WHERE deleted_at IS NULL;
 
 -- ============================================
@@ -110,59 +142,75 @@ ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 -- ============================================
 
 -- Policy: Users can view customers from their organization(s)
-CREATE POLICY "Users can view org customers"
-  ON customers
-  FOR SELECT
-  USING (
-    organization_id IN (
-      SELECT organization_id
-      FROM organization_members
-      WHERE user_id = auth.uid()
-        AND deleted_at IS NULL
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Users can view org customers"
+    ON customers
+    FOR SELECT
+    USING (
+      organization_id IN (
+        SELECT organization_id
+        FROM organization_members
+        WHERE user_id = auth.uid()
+          AND deleted_at IS NULL
+      )
+    );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policy: Users can insert customers to their organization(s)
-CREATE POLICY "Users can create org customers"
-  ON customers
-  FOR INSERT
-  WITH CHECK (
-    organization_id IN (
-      SELECT organization_id
-      FROM organization_members
-      WHERE user_id = auth.uid()
-        AND deleted_at IS NULL
-        AND role IN ('owner', 'admin', 'accountant')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Users can create org customers"
+    ON customers
+    FOR INSERT
+    WITH CHECK (
+      organization_id IN (
+        SELECT organization_id
+        FROM organization_members
+        WHERE user_id = auth.uid()
+          AND deleted_at IS NULL
+          AND role IN ('owner', 'admin', 'accountant')
+      )
+    );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policy: Users can update customers in their organization(s)
-CREATE POLICY "Users can update org customers"
-  ON customers
-  FOR UPDATE
-  USING (
-    organization_id IN (
-      SELECT organization_id
-      FROM organization_members
-      WHERE user_id = auth.uid()
-        AND deleted_at IS NULL
-        AND role IN ('owner', 'admin', 'accountant')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Users can update org customers"
+    ON customers
+    FOR UPDATE
+    USING (
+      organization_id IN (
+        SELECT organization_id
+        FROM organization_members
+        WHERE user_id = auth.uid()
+          AND deleted_at IS NULL
+          AND role IN ('owner', 'admin', 'accountant')
+      )
+    );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policy: Users can soft delete customers in their organization(s)
-CREATE POLICY "Users can delete org customers"
-  ON customers
-  FOR DELETE
-  USING (
-    organization_id IN (
-      SELECT organization_id
-      FROM organization_members
-      WHERE user_id = auth.uid()
-        AND deleted_at IS NULL
-        AND role IN ('owner', 'admin')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Users can delete org customers"
+    ON customers
+    FOR DELETE
+    USING (
+      organization_id IN (
+        SELECT organization_id
+        FROM organization_members
+        WHERE user_id = auth.uid()
+          AND deleted_at IS NULL
+          AND role IN ('owner', 'admin')
+      )
+    );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================
 -- Trigger: Auto-update updated_at timestamp
@@ -176,6 +224,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_customers_updated_at ON customers;
 CREATE TRIGGER trigger_customers_updated_at
   BEFORE UPDATE ON customers
   FOR EACH ROW
