@@ -90,7 +90,7 @@ export default async function DashboardPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Quick Actions
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <a
                   href="/invoices/new"
                   className="block p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
@@ -116,6 +116,15 @@ export default async function DashboardPage() {
                   <h4 className="font-semibold text-gray-900">Products</h4>
                   <p className="text-sm text-gray-600 mt-1">
                     Manage your product catalog
+                  </p>
+                </a>
+                <a
+                  href="/settings"
+                  className="block p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                >
+                  <h4 className="font-semibold text-gray-900">Settings</h4>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Organization & certificates
                   </p>
                 </a>
               </div>
