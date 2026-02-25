@@ -18,6 +18,7 @@ import type { Role } from '@/lib/rbac/types';
  */
 export interface TeamMember {
   id: string;
+  auth_id: string;  // Supabase auth ID (used in organization_members.user_id)
   email: string;
   full_name: string;
   role: Role;

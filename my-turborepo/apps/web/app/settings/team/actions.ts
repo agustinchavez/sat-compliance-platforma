@@ -48,7 +48,8 @@ export async function getTeamData(): Promise<{
   const stats = statsResult.success ? statsResult.stats : null
 
   // Check if current user can manage team
-  const canManage = await canManageTeam(user.id, user.organizationId)
+  // Note: organization_members.user_id stores auth_id, not users.id
+  const canManage = await canManageTeam(user.authId, user.organizationId)
 
   return { members, invitations, stats, canManage }
 }
@@ -63,8 +64,8 @@ export async function inviteTeamMemberAction(
   try {
     const user = await requireAuth()
 
-    // Check permission
-    const canManage = await canManageTeam(user.id, user.organizationId)
+    // Check permission (organization_members.user_id stores auth_id)
+    const canManage = await canManageTeam(user.authId, user.organizationId)
     if (!canManage) {
       return { success: false, error: 'Not authorized to invite team members', message: null }
     }
@@ -119,17 +120,17 @@ export async function changeRoleAction(
   try {
     const user = await requireAuth()
 
-    // Check permission
-    const canManage = await canManageTeam(user.id, user.organizationId)
+    // Check permission (organization_members.user_id stores auth_id)
+    const canManage = await canManageTeam(user.authId, user.organizationId)
     if (!canManage) {
       return { success: false, error: 'Not authorized to change roles', message: null }
     }
 
     const result = await updateTeamMemberRole({
-      user_id: userId,
+      user_id: userId,  // This is now auth_id from the UI
       old_role: currentRole,
       new_role: newRole,
-      changed_by: user.id,
+      changed_by: user.authId,  // Use authId for organization_members queries
     })
 
     if (!result.success) {
@@ -163,13 +164,14 @@ export async function removeTeamMemberAction(
   try {
     const user = await requireAuth()
 
-    // Check permission
-    const canManage = await canManageTeam(user.id, user.organizationId)
+    // Check permission (organization_members.user_id stores auth_id)
+    const canManage = await canManageTeam(user.authId, user.organizationId)
     if (!canManage) {
       return { success: false, error: 'Not authorized to remove team members', message: null }
     }
 
-    const result = await removeTeamMember(user.organizationId, userId, user.id, reason)
+    // userId is auth_id from the UI, removedBy should also be auth_id
+    const result = await removeTeamMember(user.organizationId, userId, user.authId, reason)
 
     if (!result.success) {
       return { success: false, error: result.error, message: null }

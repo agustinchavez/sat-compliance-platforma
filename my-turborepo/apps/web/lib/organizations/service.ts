@@ -187,8 +187,8 @@ export async function updateOrganization(
   updateData: OrganizationUpdateData
 ): Promise<Organization> {
   try {
-    // Validate update data
-    const validation = validateOrganizationData(updateData);
+    // Validate update data (isUpdate: true allows partial updates)
+    const validation = validateOrganizationData(updateData, { isUpdate: true });
     if (!validation.valid) {
       throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
     }

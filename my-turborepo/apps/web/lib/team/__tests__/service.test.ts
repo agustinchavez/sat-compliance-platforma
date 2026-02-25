@@ -228,12 +228,12 @@ describe('getTeamMembers', () => {
 
   it('should support sorting', async () => {
     const result = await getTeamMembers(mockOrganizationId, {
-      sortBy: 'full_name',
+      sortBy: 'name',
       sortOrder: 'asc',
     });
 
     expect(result.success).toBe(true);
-    expect(mockSupabase.order).toHaveBeenCalledWith('full_name', {
+    expect(mockSupabase.order).toHaveBeenCalledWith('name', {
       ascending: true,
     });
   });

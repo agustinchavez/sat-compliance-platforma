@@ -12,7 +12,7 @@
  * for digitally signing invoices according to SAT regulations.
  */
 
-import { pki } from 'node-forge';
+import { pki, asn1 } from 'node-forge';
 import { createClient } from '@/lib/supabase/server';
 import type {
   CertificateFiles,
@@ -142,7 +142,7 @@ export async function uploadCertificates(
       checksumKey: computeHash(files.keyFile),
     };
 
-    // Step 7: Upload to R2 storage
+    // Step 7: Prepare encrypted data for storage
     const encryptedCertBuffer = Buffer.from(
       JSON.stringify(encryptedCert),
       'utf8'
@@ -152,14 +152,25 @@ export async function uploadCertificates(
       'utf8'
     );
 
-    await uploadCertificateFiles(
-      organizationId,
-      encryptedCertBuffer,
-      encryptedKeyBuffer,
-      metadata
-    );
+    // Step 7b: Try to upload to R2 storage (optional - skip if not configured)
+    const r2Configured = process.env.R2_ACCOUNT_ID &&
+                         !process.env.R2_ACCOUNT_ID.includes('your-');
 
-    // Step 8: Update organization record
+    if (r2Configured) {
+      try {
+        await uploadCertificateFiles(
+          organizationId,
+          encryptedCertBuffer,
+          encryptedKeyBuffer,
+          metadata
+        );
+      } catch (r2Error) {
+        console.warn('R2 storage upload failed, storing in database only:', r2Error);
+        // Continue - certificates will be stored in database
+      }
+    }
+
+    // Step 8: Update organization record (always store in database)
     await supabase
       .from('organizations')
       .update({
@@ -276,8 +287,8 @@ export async function validateCertificates(
 export function parseCertificate(cerFile: Buffer): pki.Certificate {
   try {
     // Try DER format first (common for SAT certificates)
-    const asn1 = pki.fromDer(cerFile.toString('binary'));
-    return pki.certificateFromAsn1(asn1);
+    const derData = asn1.fromDer(cerFile.toString('binary'));
+    return pki.certificateFromAsn1(derData);
   } catch {
     // Try PEM format as fallback
     try {
@@ -463,24 +474,76 @@ export async function getCertificateInfo(
   organizationId: string
 ): Promise<CertificateInfo | null> {
   try {
-    // Check if certificates exist in storage
-    const exists = await certificateFilesExist(organizationId);
-    if (!exists.metadataExists) {
-      return null;
+    // First try to get from database (primary storage)
+    const supabase = await createClient();
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('cfdi_cert')
+      .eq('id', organizationId)
+      .single();
+
+    if (org?.cfdi_cert) {
+      // Certificate is stored in database
+      // Supabase returns bytea as hex string starting with \x
+      let certData: string;
+      if (Buffer.isBuffer(org.cfdi_cert)) {
+        certData = org.cfdi_cert.toString('utf8');
+      } else if (typeof org.cfdi_cert === 'string') {
+        // Check if it's hex-encoded (starts with \x)
+        if (org.cfdi_cert.startsWith('\\x')) {
+          // Decode hex string to UTF-8
+          const hexStr = org.cfdi_cert.slice(2); // Remove \x prefix
+          certData = Buffer.from(hexStr, 'hex').toString('utf8');
+        } else {
+          certData = org.cfdi_cert;
+        }
+      } else {
+        certData = JSON.stringify(org.cfdi_cert);
+      }
+
+      // Parse the encrypted certificate data
+      let encryptedCert: EncryptedData;
+      try {
+        const parsed = JSON.parse(certData);
+        // Handle if the data has a "type" wrapper from the encryption
+        if (parsed.type === 'Buffer' && parsed.data) {
+          // It's a serialized Buffer, convert back and parse again
+          const bufferData = Buffer.from(parsed.data);
+          encryptedCert = JSON.parse(bufferData.toString('utf8'));
+        } else if (parsed.encryptedData && parsed.iv && parsed.authTag) {
+          // Direct EncryptedData format
+          encryptedCert = parsed;
+        } else {
+          throw new Error('Unknown certificate data format');
+        }
+      } catch (parseError) {
+        console.error('Failed to parse certificate data:', parseError, 'Raw data preview:', certData.substring(0, 100));
+        return null;
+      }
+
+      const decryptedCert = decryptCertificate(encryptedCert);
+      const certificate = parseCertificate(decryptedCert);
+      return extractCertificateDetails(certificate);
     }
 
-    // Download and decrypt certificate
-    const { cerFile, metadata } = await downloadCertificateFiles(organizationId);
+    // Fallback: Check R2 storage if configured
+    const r2Configured = process.env.R2_ACCOUNT_ID &&
+                         !process.env.R2_ACCOUNT_ID.includes('your-');
 
-    // Parse encrypted certificate
-    const encryptedCert: EncryptedData = JSON.parse(cerFile.toString('utf8'));
-    const decryptedCert = decryptCertificate(encryptedCert);
+    if (r2Configured) {
+      const exists = await certificateFilesExist(organizationId);
+      if (!exists.metadataExists) {
+        return null;
+      }
 
-    // Parse certificate
-    const certificate = parseCertificate(decryptedCert);
-    const certInfo = extractCertificateDetails(certificate);
+      const { cerFile } = await downloadCertificateFiles(organizationId);
+      const encryptedCert: EncryptedData = JSON.parse(cerFile.toString('utf8'));
+      const decryptedCert = decryptCertificate(encryptedCert);
+      const certificate = parseCertificate(decryptedCert);
+      return extractCertificateDetails(certificate);
+    }
 
-    return certInfo;
+    return null;
   } catch (error) {
     console.error('Failed to get certificate info:', error);
     return null;

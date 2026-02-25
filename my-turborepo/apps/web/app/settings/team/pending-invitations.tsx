@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { resendInvitationAction, cancelInvitationAction } from './actions'
 import type { Invitation } from '@/lib/team/types'
 import type { Role } from '@/lib/rbac/types'
@@ -21,6 +21,14 @@ export function PendingInvitations({ invitations, canManage }: PendingInvitation
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  // Auto-dismiss success message after 3 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [successMessage])
 
   const handleResend = async (invitationId: string) => {
     setLoadingId(invitationId)

@@ -5,8 +5,7 @@
  * role management, ownership transfers, and activity logging.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import type { Database } from '@/lib/database.types';
+import { describe, it, expect } from 'vitest';
 
 // This file contains integration tests that would run against a test database
 // In a real environment, you would set up test fixtures and tear them down

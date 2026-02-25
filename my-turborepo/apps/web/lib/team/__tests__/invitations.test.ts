@@ -661,7 +661,7 @@ describe('getPendingInvitations', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.invitations).toHaveLength(1);
-      expect(result.invitations[0].status).toBe('pending');
+      expect(result.invitations[0]?.status).toBe('pending');
     }
   });
 });

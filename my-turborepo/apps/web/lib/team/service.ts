@@ -43,7 +43,8 @@ export async function getTeamMembers(
   try {
     const supabase = await createClient();
 
-    // Query organization_members with joined user data
+    // Query organization_members and fetch user data separately
+    // (organization_members.user_id references users.auth_id, not users.id)
     let query = supabase
       .from('organization_members')
       .select(`
@@ -54,15 +55,7 @@ export async function getTeamMembers(
         invited_by,
         created_at,
         updated_at,
-        deleted_at,
-        user:users!user_id (
-          id,
-          email,
-          full_name,
-          email_verified,
-          phone,
-          last_login_at
-        )
+        deleted_at
       `, { count: 'exact' })
       .eq('organization_id', organizationId);
 
@@ -127,11 +120,22 @@ export async function getTeamMembers(
       return { success: false, error: 'Failed to fetch team members' };
     }
 
+    // Fetch user data separately using auth_id
+    const userIds = (orgMembers || []).map((om: any) => om.user_id);
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, auth_id, email, full_name, email_verified, phone, last_login_at')
+      .in('auth_id', userIds);
+
+    // Create a map of auth_id to user data
+    const userMap = new Map((users || []).map((u: any) => [u.auth_id, u]));
+
     // Transform organization_members data to TeamMember format
     const members: TeamMember[] = (orgMembers || []).map((om: any) => {
-      const user = Array.isArray(om.user) ? om.user[0] : om.user;
+      const user = userMap.get(om.user_id);
       return {
         id: user?.id || om.user_id,
+        auth_id: om.user_id,  // organization_members.user_id stores auth_id
         email: user?.email || '',
         full_name: user?.full_name || '',
         role: om.role,
@@ -204,6 +208,7 @@ export async function getTeamMember(
     const user = Array.isArray(orgMember.user) ? orgMember.user[0] : orgMember.user;
     const member: TeamMember = {
       id: user?.id || orgMember.user_id,
+      auth_id: orgMember.user_id,  // organization_members.user_id stores auth_id
       email: user?.email || '',
       full_name: user?.full_name || '',
       role: orgMember.role,

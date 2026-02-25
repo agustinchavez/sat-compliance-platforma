@@ -41,7 +41,7 @@ export default async function TeamSettingsPage() {
         <div className="p-6">
           <TeamMemberList
             members={members}
-            currentUserId={user.id}
+            currentUserAuthId={user.authId}
             canManage={canManage}
           />
         </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useState, useEffect } from 'react'
 import { createCustomerAction, type CustomerFormState } from './actions'
 import type { Customer } from '@/lib/customers/types'
 import type { TaxRegime, CFDIUse } from '@/lib/customers/types'
@@ -65,10 +65,12 @@ export function CustomerForm({ customer, taxRegimes, cfdiUses, onCancel, onSucce
     ? taxRegimes.filter(r => r.applicable_to === rfcType || r.applicable_to === 'both')
     : taxRegimes
 
-  // Handle success callback
-  if (state.success && onSuccess) {
-    onSuccess(state.customerId)
-  }
+  // Handle success callback in useEffect to avoid state update during render
+  useEffect(() => {
+    if (state.success && onSuccess) {
+      onSuccess(state.customerId)
+    }
+  }, [state.success, state.customerId, onSuccess])
 
   return (
     <form action={formAction} className="space-y-6">

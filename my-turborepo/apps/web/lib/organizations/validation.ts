@@ -161,9 +161,15 @@ export function formatRFC(rfc: string | null | undefined): string {
 const POSTAL_CODE_PATTERN = /^\d{5}$/;
 
 /**
- * Mexican state codes (2 letters)
+ * Mexican state codes (SAT standard 3-letter codes)
+ * Source: SAT Catálogo de Estados
  */
 const MEXICAN_STATE_CODES = [
+  'AGU', 'BCN', 'BCS', 'CAM', 'CHP', 'CHH', 'COA', 'COL', 'CMX', 'DUR',
+  'GUA', 'GRO', 'HID', 'JAL', 'MEX', 'MIC', 'MOR', 'NAY', 'NLE', 'OAX',
+  'PUE', 'QUE', 'ROO', 'SLP', 'SIN', 'SON', 'TAB', 'TAM', 'TLA', 'VER',
+  'YUC', 'ZAC',
+  // Also accept legacy 2-letter codes for backwards compatibility
   'AG', 'BC', 'BS', 'CM', 'CS', 'CH', 'CO', 'CL', 'DF', 'DG',
   'GT', 'GR', 'HG', 'JA', 'EM', 'MI', 'MO', 'NA', 'NL', 'OA',
   'PU', 'QT', 'QR', 'SL', 'SI', 'SO', 'TB', 'TM', 'TL', 'VE',
@@ -580,7 +586,7 @@ export function validatePACProvider(
 // ============================================================================
 
 /**
- * Validates complete organization data
+ * Validates complete organization data (for creation)
  *
  * @param data - Organization data to validate
  * @returns Validation result
@@ -593,30 +599,44 @@ export function validateOrganizationData(data: {
   email?: string;
   phone?: string;
   address?: OrganizationAddress;
-}): ValidationResult {
+}, options: { isUpdate?: boolean } = {}): ValidationResult {
   const errors: string[] = [];
 
-  // Name validation
-  if (!data.name || data.name.trim() === '') {
+  // Name validation (only if provided for updates, required for creation)
+  if (data.name !== undefined) {
+    if (data.name.trim() === '') {
+      errors.push('Organization name cannot be empty');
+    } else if (data.name.length > 255) {
+      errors.push('Organization name must be less than 255 characters');
+    }
+  } else if (!options.isUpdate) {
     errors.push('Organization name is required');
-  } else if (data.name.length > 255) {
-    errors.push('Organization name must be less than 255 characters');
   }
 
-  // RFC validation
-  const rfcResult = validateRFC(data.rfc, { required: true });
-  errors.push(...rfcResult.errors);
+  // RFC validation (only validate if provided, required only for creation)
+  if (data.rfc !== undefined) {
+    const rfcResult = validateRFC(data.rfc, { required: true });
+    errors.push(...rfcResult.errors);
+  } else if (!options.isUpdate) {
+    errors.push('RFC is required');
+  }
 
-  // Legal name validation
-  if (!data.legal_name || data.legal_name.trim() === '') {
+  // Legal name validation (only if provided for updates)
+  if (data.legal_name !== undefined) {
+    if (data.legal_name.trim() === '') {
+      errors.push('Legal name cannot be empty');
+    } else if (data.legal_name.length > 255) {
+      errors.push('Legal name must be less than 255 characters');
+    }
+  } else if (!options.isUpdate) {
     errors.push('Legal name is required');
-  } else if (data.legal_name.length > 255) {
-    errors.push('Legal name must be less than 255 characters');
   }
 
-  // Tax regime validation
-  const taxRegimeResult = validateTaxRegime(data.tax_regime, { required: true });
-  errors.push(...taxRegimeResult.errors);
+  // Tax regime validation (only if provided)
+  if (data.tax_regime !== undefined && data.tax_regime !== '') {
+    const taxRegimeResult = validateTaxRegime(data.tax_regime, { required: false });
+    errors.push(...taxRegimeResult.errors);
+  }
 
   // Email validation (optional)
   if (data.email) {

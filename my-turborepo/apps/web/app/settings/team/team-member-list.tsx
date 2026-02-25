@@ -7,7 +7,7 @@ import type { Role } from '@/lib/rbac/types'
 
 interface TeamMemberListProps {
   members: TeamMember[]
-  currentUserId: string
+  currentUserAuthId: string  // Supabase auth ID for comparison with member.auth_id
   canManage: boolean
 }
 
@@ -25,7 +25,7 @@ const roleLabels: Record<Role, string> = {
   user: 'User',
 }
 
-export function TeamMemberList({ members, currentUserId, canManage }: TeamMemberListProps) {
+export function TeamMemberList({ members, currentUserAuthId, canManage }: TeamMemberListProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -40,7 +40,8 @@ export function TeamMemberList({ members, currentUserId, canManage }: TeamMember
     setIsLoading(true)
     setError(null)
 
-    const result = await changeRoleAction(member.id, member.role, newRole)
+    // Use auth_id for organization_members queries
+    const result = await changeRoleAction(member.auth_id, member.role, newRole)
 
     if (!result.success) {
       setError(result.error || 'Failed to change role')
@@ -54,7 +55,8 @@ export function TeamMemberList({ members, currentUserId, canManage }: TeamMember
     setIsLoading(true)
     setError(null)
 
-    const result = await removeTeamMemberAction(member.id)
+    // Use auth_id for organization_members queries
+    const result = await removeTeamMemberAction(member.auth_id)
 
     if (!result.success) {
       setError(result.error || 'Failed to remove member')
@@ -99,7 +101,7 @@ export function TeamMemberList({ members, currentUserId, canManage }: TeamMember
                   <span className="font-medium text-gray-900">
                     {member.full_name || 'Unnamed User'}
                   </span>
-                  {member.id === currentUserId && (
+                  {member.auth_id === currentUserAuthId && (
                     <span className="text-xs text-gray-500">(You)</span>
                   )}
                 </div>
@@ -127,7 +129,7 @@ export function TeamMemberList({ members, currentUserId, canManage }: TeamMember
               )}
 
               {/* Actions */}
-              {canManage && member.id !== currentUserId && member.role !== 'owner' && (
+              {canManage && member.auth_id !== currentUserAuthId && member.role !== 'owner' && (
                 <div className="flex items-center space-x-1">
                   {removingId === member.id ? (
                     <>

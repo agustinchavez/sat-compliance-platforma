@@ -17,9 +17,15 @@ const roles: { value: Role; label: string; description: string }[] = [
 ]
 
 export function InviteMemberForm() {
-  const [state, formAction, isPending] = useActionState(inviteTeamMemberAction, initialState)
-  const [selectedRole, setSelectedRole] = useState<Role>('user')
   const [showForm, setShowForm] = useState(false)
+  // Use formKey to reset form state when reopening
+  const [formKey, setFormKey] = useState(0)
+
+  const handleClose = () => {
+    setShowForm(false)
+    // Increment key to force form reset on next open
+    setFormKey(k => k + 1)
+  }
 
   if (!showForm) {
     return (
@@ -33,12 +39,19 @@ export function InviteMemberForm() {
     )
   }
 
+  return <InviteFormContent key={formKey} onClose={handleClose} />
+}
+
+function InviteFormContent({ onClose }: { onClose: () => void }) {
+  const [state, formAction, isPending] = useActionState(inviteTeamMemberAction, initialState)
+  const [selectedRole, setSelectedRole] = useState<Role>('user')
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">Invite New Team Member</h3>
         <button
-          onClick={() => setShowForm(false)}
+          onClick={onClose}
           className="text-gray-400 hover:text-gray-600"
         >
           x
@@ -129,7 +142,7 @@ export function InviteMemberForm() {
         <div className="flex justify-end space-x-3 pt-2">
           <button
             type="button"
-            onClick={() => setShowForm(false)}
+            onClick={onClose}
             className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900"
           >
             Cancel
