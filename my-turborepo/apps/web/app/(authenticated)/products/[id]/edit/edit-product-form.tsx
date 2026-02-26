@@ -1,14 +1,15 @@
 'use client'
 
-import { useActionState, useState } from 'react'
-import { createProductAction, type ProductFormState } from './actions'
+import { useActionState, useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Product } from '@/lib/products/types'
+import type { ProductFormState } from '../../actions'
 
-interface ProductFormProps {
-  product?: Product
-  categories?: string[]
-  onCancel: () => void
-  onSuccess?: (productId?: string) => void
+interface EditProductFormProps {
+  product: Product
+  categories: string[]
+  updateAction: (prevState: ProductFormState, formData: FormData) => Promise<ProductFormState>
+  productId: string
 }
 
 const initialState: ProductFormState = {
@@ -44,21 +45,22 @@ const COMMON_SAT_UNIT_CODES = [
   { code: 'XPK', name: 'Paquete' },
 ]
 
-export function ProductForm({ product, categories = [], onCancel, onSuccess }: ProductFormProps) {
-  const [state, formAction, isPending] = useActionState(createProductAction, initialState)
-  const [productType, setProductType] = useState<'product' | 'service'>(product?.type || 'product')
-  const [trackInventory, setTrackInventory] = useState(product?.track_inventory || false)
-  const [selectedUnitCode, setSelectedUnitCode] = useState(product?.sat_unit_code || 'H87')
+export function EditProductForm({ product, categories, updateAction, productId }: EditProductFormProps) {
+  const router = useRouter()
+  const [state, formAction, isPending] = useActionState(updateAction, initialState)
+  const [productType, setProductType] = useState<'product' | 'service'>(product.type)
+  const [trackInventory, setTrackInventory] = useState(product.track_inventory || false)
+  const [selectedUnitCode, setSelectedUnitCode] = useState(product.sat_unit_code)
 
-  // Handle success callback
-  if (state.success && onSuccess) {
-    onSuccess(state.productId)
-  }
+  // Handle success - redirect to product detail page
+  useEffect(() => {
+    if (state.success) {
+      router.push(`/products/${productId}`)
+    }
+  }, [state.success, productId, router])
 
-  // Get unit name from selected code
-  const getUnitName = (code: string) => {
-    const unit = COMMON_SAT_UNIT_CODES.find(u => u.code === code)
-    return unit?.name || ''
+  const handleCancel = () => {
+    router.push(`/products/${productId}`)
   }
 
   return (
@@ -143,7 +145,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
               type="text"
               id="name"
               name="name"
-              defaultValue={product?.name}
+              defaultValue={product.name}
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Product or service name"
@@ -159,7 +161,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
               id="description"
               name="description"
               rows={2}
-              defaultValue={product?.description}
+              defaultValue={product.description || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Detailed description for invoices"
             />
@@ -174,7 +176,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
               type="text"
               id="sku"
               name="sku"
-              defaultValue={product?.sku}
+              defaultValue={product.sku || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
               placeholder="Auto-generated if empty"
             />
@@ -189,7 +191,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
               type="text"
               id="barcode"
               name="barcode"
-              defaultValue={product?.barcode}
+              defaultValue={product.barcode || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Optional barcode"
             />
@@ -205,7 +207,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
               id="category"
               name="category"
               list="categories-list"
-              defaultValue={product?.category}
+              defaultValue={product.category || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="e.g., Electronics, Services"
             />
@@ -225,7 +227,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
               type="text"
               id="tags"
               name="tags"
-              defaultValue={product?.tags?.join(', ')}
+              defaultValue={product.tags?.join(', ') || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="tag1, tag2, tag3"
             />
@@ -246,7 +248,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
             <select
               id="sat_product_code"
               name="sat_product_code"
-              defaultValue={product?.sat_product_code || ''}
+              defaultValue={product.sat_product_code}
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
@@ -293,7 +295,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
               type="text"
               id="unit_name"
               name="unit_name"
-              defaultValue={product?.unit_name || getUnitName(selectedUnitCode)}
+              defaultValue={product.unit_name}
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="e.g., Pieza, Hora, Servicio"
@@ -320,7 +322,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
                 name="price"
                 step="0.01"
                 min="0"
-                defaultValue={product?.price || ''}
+                defaultValue={product.price}
                 required
                 className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="0.00"
@@ -336,7 +338,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
             <select
               id="tax_object"
               name="tax_object"
-              defaultValue={product?.tax_object || '02'}
+              defaultValue={product.tax_object}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="01">01 - No objeto de impuesto</option>
@@ -353,7 +355,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
             <select
               id="iva_rate"
               name="iva_rate"
-              defaultValue={product?.iva_rate?.toString() || '0.16'}
+              defaultValue={product.iva_rate.toString()}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="0.16">16%</option>
@@ -372,7 +374,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
                 type="checkbox"
                 name="iva_retention"
                 value="true"
-                defaultChecked={product?.iva_retention}
+                defaultChecked={product.iva_retention}
                 className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700">IVA Retention (10.67%)</span>
@@ -382,7 +384,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
                 type="checkbox"
                 name="isr_retention"
                 value="true"
-                defaultChecked={product?.isr_retention}
+                defaultChecked={product.isr_retention}
                 className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700">ISR Retention (10%)</span>
@@ -420,7 +422,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
                   id="current_stock"
                   name="current_stock"
                   min="0"
-                  defaultValue={product?.current_stock || 0}
+                  defaultValue={product.current_stock}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -433,7 +435,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
                   id="min_stock"
                   name="min_stock"
                   min="0"
-                  defaultValue={product?.min_stock || ''}
+                  defaultValue={product.min_stock || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -449,7 +451,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
             type="checkbox"
             name="is_active"
             value="true"
-            defaultChecked={product?.is_active !== false}
+            defaultChecked={product.is_active !== false}
             className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
           />
           <span className="ml-2 text-sm text-gray-700">Active (available for invoicing)</span>
@@ -460,7 +462,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
       <div className="flex justify-end space-x-3">
         <button
           type="button"
-          onClick={onCancel}
+          onClick={handleCancel}
           className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50"
         >
           Cancel
@@ -470,7 +472,7 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
           disabled={isPending}
           className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isPending ? 'Saving...' : product ? 'Update Product' : 'Create Product'}
+          {isPending ? 'Saving...' : 'Update Product'}
         </button>
       </div>
     </form>

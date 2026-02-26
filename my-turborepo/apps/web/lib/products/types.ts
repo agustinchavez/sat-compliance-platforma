@@ -155,6 +155,7 @@ export interface ProductUpdateInput {
 
   // Inventory
   track_inventory?: boolean;
+  current_stock?: number;
   min_stock?: number;
   max_stock?: number;
 

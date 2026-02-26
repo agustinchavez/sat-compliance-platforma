@@ -187,7 +187,7 @@ export async function parseCFDIsFromZip(zipBuffer: Buffer): Promise<ParsedCFDI[]
 export function extractUUID(xml: string): string | null {
   // Try regex first for performance
   const uuidMatch = xml.match(/UUID="([^"]+)"/i);
-  if (uuidMatch) {
+  if (uuidMatch && uuidMatch[1]) {
     return uuidMatch[1].toUpperCase();
   }
 

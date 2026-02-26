@@ -184,6 +184,7 @@ export async function updateProduct(
   if (input.isr_retention !== undefined) updateData.isr_retention = input.isr_retention;
   if (input.isr_retention_rate !== undefined) updateData.isr_retention_rate = input.isr_retention_rate;
   if (input.track_inventory !== undefined) updateData.track_inventory = input.track_inventory;
+  if (input.current_stock !== undefined) updateData.current_stock = input.current_stock;
   if (input.min_stock !== undefined) updateData.min_stock = input.min_stock;
   if (input.max_stock !== undefined) updateData.max_stock = input.max_stock;
   if (input.category !== undefined) updateData.category = input.category;

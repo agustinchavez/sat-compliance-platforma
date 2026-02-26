@@ -77,10 +77,10 @@ export async function requireOrganization(): Promise<string> {
  */
 export function withTenantContext<T extends (...args: any[]) => any>(
   handler: (context: TenantContext, ...args: Parameters<T>) => ReturnType<T>
-): (...args: Parameters<T>) => ReturnType<T> {
-  return async (...args: Parameters<T>) => {
+) {
+  return async (...args: Parameters<T>): Promise<Awaited<ReturnType<T>>> => {
     const context = await extractTenantContext()
-    return handler(context, ...args)
+    return handler(context, ...args) as Awaited<ReturnType<T>>
   }
 }
 
@@ -178,13 +178,13 @@ export async function injectTenantContext<T extends Record<string, any>>(
  */
 export function withTenantValidation<T extends (...args: any[]) => any>(
   action: T
-): (...args: Parameters<T>) => ReturnType<T> {
-  return async (...args: Parameters<T>) => {
+) {
+  return async (...args: Parameters<T>): Promise<Awaited<ReturnType<T>>> => {
     // Validate organization context exists
     await requireOrganization()
 
     // Execute action
-    return action(...args)
+    return action(...args) as Awaited<ReturnType<T>>
   }
 }
 

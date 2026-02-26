@@ -501,20 +501,21 @@ export async function bulkUpdate(
     updateData.tags = updates.tags;
   }
 
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from('customers')
     .update(updateData)
     .in('id', customerIds)
     .is('deleted_at', null)
-    .select('*', { count: 'exact', head: true });
+    .select('id');
 
   if (error) {
     throw new Error(`Failed to bulk update customers: ${error.message}`);
   }
 
+  const updatedCount = data?.length || 0;
   return {
-    updated_count: count || 0,
-    failed_count: customerIds.length - (count || 0),
+    updated_count: updatedCount,
+    failed_count: customerIds.length - updatedCount,
   };
 }
 

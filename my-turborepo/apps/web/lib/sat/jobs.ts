@@ -374,7 +374,7 @@ export async function processJob(jobId: string): Promise<JobResult> {
 
     // Schedule retry if failed and attempts remaining
     if (!result.success && job.attempts < MAX_JOB_ATTEMPTS - 1) {
-      const retryDelay = JOB_RETRY_DELAYS[job.attempts] || JOB_RETRY_DELAYS[2];
+      const retryDelay = JOB_RETRY_DELAYS[job.attempts] ?? JOB_RETRY_DELAYS[2] ?? 60000;
       const retryAt = new Date(Date.now() + retryDelay);
 
       await supabase

@@ -9,7 +9,8 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type { OrganizationSettings, DEFAULT_ORGANIZATION_SETTINGS } from './types';
+import type { OrganizationSettings } from './types';
+import { DEFAULT_ORGANIZATION_SETTINGS } from './types';
 import { getOrganization } from './service';
 
 // ============================================================================
@@ -344,10 +345,10 @@ function mergeWithDefaults(
  * @returns Merged object
  */
 function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
-  const result = { ...target };
+  const result = { ...target } as T;
 
   for (const key in source) {
-    if (source.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
       const sourceValue = source[key];
       const targetValue = result[key];
 
@@ -360,10 +361,10 @@ function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>)
         !Array.isArray(targetValue)
       ) {
         // Recursively merge objects
-        result[key] = deepMerge(targetValue, sourceValue);
+        (result as any)[key] = deepMerge(targetValue as Record<string, any>, sourceValue as Partial<Record<string, any>>);
       } else if (sourceValue !== undefined) {
         // Override with source value
-        result[key] = sourceValue;
+        (result as any)[key] = sourceValue;
       }
     }
   }
@@ -425,7 +426,7 @@ export function setSetting(
   let current: any = result;
 
   for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i];
+    const key = keys[i]!;
     if (!(key in current) || typeof current[key] !== 'object') {
       current[key] = {};
     } else {
@@ -434,7 +435,8 @@ export function setSetting(
     current = current[key];
   }
 
-  current[keys[keys.length - 1]] = value;
+  const lastKey = keys[keys.length - 1]!;
+  current[lastKey] = value;
   return result;
 }
 

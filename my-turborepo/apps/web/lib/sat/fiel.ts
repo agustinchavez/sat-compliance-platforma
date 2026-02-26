@@ -148,7 +148,18 @@ export async function loadAndDecryptFIEL(
 
     // Parse certificate to get info
     const certificate = parseCertificate(credentials.certificate);
-    const info = extractCertificateDetails(certificate);
+    const certInfo = extractCertificateDetails(certificate);
+
+    // Convert to FIELInfo format
+    const info: FIELInfo = {
+      serialNumber: certInfo.serialNumber,
+      issuer: certInfo.issuer,
+      subject: certInfo.subject,
+      validFrom: certInfo.validFrom,
+      validTo: certInfo.validTo,
+      isValid: certInfo.status === 'valid',
+      daysUntilExpiry: certInfo.daysUntilExpiry,
+    };
 
     // Validate certificate is still valid
     validateCertificateExpiry(info);
@@ -162,15 +173,7 @@ export async function loadAndDecryptFIEL(
       privateKey: privateKeyBuffer,
       certificatePem,
       privateKeyPem,
-      info: {
-        serialNumber: info.serialNumber,
-        issuer: info.issuer,
-        subject: info.subject,
-        validFrom: info.validFrom,
-        validTo: info.validTo,
-        isValid: info.status === 'valid',
-        daysUntilExpiry: info.daysUntilExpiry,
-      },
+      info,
     };
   } catch (error) {
     if (error instanceof SATCertificateError || error instanceof SATAuthenticationError) {
@@ -195,7 +198,7 @@ export async function loadAndDecryptFIEL(
 function getCertificatePem(certBuffer: Buffer): string {
   try {
     // Try to parse as DER first
-    const asn1Cert = pki.fromDer(certBuffer.toString('binary'));
+    const asn1Cert = asn1.fromDer(certBuffer.toString('binary'));
     const certificate = pki.certificateFromAsn1(asn1Cert);
     return pki.certificateToPem(certificate);
   } catch {
@@ -239,7 +242,7 @@ async function decryptPrivateKeyPem(
 
     // Try as DER format
     try {
-      const asn1Key = pki.fromDer(keyBuffer.toString('binary'));
+      const asn1Key = asn1.fromDer(keyBuffer.toString('binary'));
       const privateKey = pki.privateKeyFromAsn1(asn1Key);
       return pki.privateKeyToPem(privateKey);
     } catch {
@@ -284,11 +287,9 @@ export function signXML(xml: string, fiel: DecryptedFIEL): string {
     sig.signatureAlgorithm = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
 
     // Add certificate to key info
-    sig.keyInfoProvider = {
-      getKeyInfo: () => {
-        const certBase64 = pemToDer(fiel.certificatePem).toString('base64');
-        return `<X509Data><X509Certificate>${certBase64}</X509Certificate></X509Data>`;
-      },
+    const certBase64 = pemToDer(fiel.certificatePem).toString('base64');
+    sig.getKeyInfoContent = () => {
+      return `<X509Data><X509Certificate>${certBase64}</X509Certificate></X509Data>`;
     };
 
     // Sign the XML
@@ -386,10 +387,7 @@ export function verifyXMLSignature(
     }
 
     // Create SignedXml instance
-    const sig = new SignedXml();
-    sig.keyInfoProvider = {
-      getKey: () => Buffer.from(certPem),
-    };
+    const sig = new SignedXml({ publicCert: certPem });
 
     // Load signed XML
     sig.loadSignature(signedXml);
@@ -415,7 +413,7 @@ function extractCertificateFromXML(signedXml: string): string | null {
       /<X509Certificate>([\s\S]*?)<\/X509Certificate>/
     );
 
-    if (!certMatch) {
+    if (!certMatch || !certMatch[1]) {
       return null;
     }
 

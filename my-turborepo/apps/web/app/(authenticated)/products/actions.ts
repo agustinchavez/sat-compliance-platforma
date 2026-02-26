@@ -196,6 +196,7 @@ export async function updateProductAction(
       isr_retention: formData.get('isr_retention') === 'true',
       isr_retention_rate: formData.get('isr_retention') === 'true' ? 0.10 : undefined,
       track_inventory: formData.get('track_inventory') === 'true',
+      current_stock: formData.get('current_stock') ? parseInt(formData.get('current_stock') as string) : undefined,
       min_stock: parseInt(formData.get('min_stock') as string) || undefined,
       category: formData.get('category') as string || undefined,
       tags: formData.get('tags') ? (formData.get('tags') as string).split(',').map(t => t.trim()).filter(Boolean) : [],

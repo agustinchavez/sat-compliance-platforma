@@ -361,6 +361,10 @@ export async function verifyPassword(
   try {
     return new Promise((resolve, reject) => {
       const [salt, key] = hash.split(':');
+      if (!salt) {
+        reject(new Error('Invalid hash format: missing salt'));
+        return;
+      }
       crypto.scrypt(password, salt, 64, (err, derivedKey) => {
         if (err) reject(err);
         resolve(key === derivedKey.toString('hex'));

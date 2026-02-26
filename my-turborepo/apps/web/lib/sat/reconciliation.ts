@@ -322,7 +322,7 @@ export async function getReconciliationSummary(
   // Build query
   let query = supabase
     .from('downloaded_cfdis')
-    .select('reconciled, monto_total')
+    .select('reconciled, monto_total, invoice_id')
     .eq('organization_id', organizationId)
     .is('deleted_at', null);
 

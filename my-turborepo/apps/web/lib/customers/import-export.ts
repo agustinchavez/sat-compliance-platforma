@@ -136,7 +136,7 @@ export async function importCustomersFromCSV(
   }
 
   // Parse headers
-  const headers = parseCSVRow(lines[0]);
+  const headers = parseCSVRow(lines[0]!);
   const headerValidation = validateCSVHeaders(headers);
 
   if (!headerValidation.valid) {
@@ -168,7 +168,7 @@ export async function importCustomersFromCSV(
 
   for (let i = 0; i < dataRows.length; i++) {
     const rowNumber = i + 2; // +2 because: 1-indexed and skip header
-    const line = dataRows[i];
+    const line = dataRows[i]!;
 
     try {
       // Parse CSV row

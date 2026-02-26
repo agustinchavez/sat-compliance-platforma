@@ -261,7 +261,7 @@ export function getAccessibleResources(
   permissions: ResourcePermissions
 ): Resource[] {
   return Object.keys(permissions).filter(
-    (resource) => permissions[resource as Resource]?.length > 0
+    (resource) => (permissions[resource as Resource]?.length ?? 0) > 0
   ) as Resource[]
 }
 

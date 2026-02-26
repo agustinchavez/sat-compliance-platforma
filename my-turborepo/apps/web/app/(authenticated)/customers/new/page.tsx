@@ -20,7 +20,7 @@ export default function NewCustomerPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-gray-500">Loading...</div>
       </div>
     )
@@ -28,15 +28,14 @@ export default function NewCustomerPage() {
 
   if (!catalogs) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-red-500">Failed to load form data</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-3xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6">
           <button
@@ -65,6 +64,5 @@ export default function NewCustomerPage() {
           }}
         />
       </div>
-    </div>
   )
 }

@@ -29,6 +29,12 @@ export interface DecryptedFIEL {
   info: FIELInfo;
 }
 
+export interface EncryptedData {
+  iv: string;               // Base64 encoded initialization vector
+  encryptedData: string;    // Base64 encoded encrypted data
+  authTag: string;          // Base64 encoded authentication tag
+}
+
 // =====================================================
 // SAT Authentication Types
 // =====================================================
