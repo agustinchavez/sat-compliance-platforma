@@ -1,2 +1,9 @@
 # Docs
-apps/web/
+apps/web/# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
