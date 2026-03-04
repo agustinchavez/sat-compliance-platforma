@@ -1,0 +1,26 @@
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+pydantic==2.7.1
+pydantic-settings==2.2.1
+sqlalchemy[asyncio]==2.0.30
+asyncpg==0.29.0
+pgvector==0.3.2
+sentence-transformers==2.7.0
+torch==2.3.0
+redis[asyncio]==5.0.4
+httpx==0.27.0
+python-dotenv==1.0.1
+pandas==2.2.2
+requests==2.31.0
+tqdm==4.66.4
+psycopg2-binary==2.9.9
+openpyxl==3.1.2
+# OCR dependencies (Component 10)
+pytesseract==0.3.10
+Pillow==10.3.0
+pdf2image==1.17.0
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+lxml==5.2.1
+pymupdf==1.24.3
+python-multipart==0.0.9

@@ -1,8 +1,9 @@
 'use client'
 
-import { useActionState, useState, useEffect } from 'react'
-import { createProductAction, type ProductFormState } from './actions'
+import { useActionState, useState, useEffect, useCallback, useRef } from 'react'
+import { createProductAction, suggestSATCodes, type ProductFormState } from './actions'
 import type { Product } from '@/lib/products/types'
+import type { SATCodeSuggestion } from '@/lib/products/types'
 
 interface ProductFormProps {
   product?: Product
@@ -49,6 +50,65 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
   const [productType, setProductType] = useState<'product' | 'service'>(product?.type || 'product')
   const [trackInventory, setTrackInventory] = useState(product?.track_inventory || false)
   const [selectedUnitCode, setSelectedUnitCode] = useState(product?.sat_unit_code || 'H87')
+
+  // AI-powered SAT code search state
+  const [satCodeSearch, setSatCodeSearch] = useState('')
+  const [satCodeSuggestions, setSatCodeSuggestions] = useState<SATCodeSuggestion[]>([])
+  const [selectedSatCode, setSelectedSatCode] = useState<{ code: string; name: string } | null>(
+    product?.sat_product_code ? { code: product.sat_product_code, name: '' } : null
+  )
+  const [isSearching, setIsSearching] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const suggestionsRef = useRef<HTMLDivElement>(null)
+
+  // Debounced AI search for SAT codes
+  const handleSatCodeSearch = useCallback(async (query: string) => {
+    setSatCodeSearch(query)
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    if (query.length < 2) {
+      setSatCodeSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const results = await suggestSATCodes(query, 8)
+        setSatCodeSuggestions(results)
+        setShowSuggestions(true)
+      } catch (error) {
+        console.error('Error searching SAT codes:', error)
+        setSatCodeSuggestions([])
+      } finally {
+        setIsSearching(false)
+      }
+    }, 300)
+  }, [])
+
+  // Handle selecting a SAT code from suggestions
+  const handleSelectSatCode = useCallback((suggestion: SATCodeSuggestion) => {
+    setSelectedSatCode({ code: suggestion.code, name: suggestion.name })
+    setSatCodeSearch('')
+    setSatCodeSuggestions([])
+    setShowSuggestions(false)
+  }, [])
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Handle success callback in useEffect to avoid state update during render
   useEffect(() => {
@@ -240,28 +300,110 @@ export function ProductForm({ product, categories = [], onCancel, onSuccess }: P
         <h3 className="text-lg font-medium text-gray-900 mb-4">SAT Codes (Required for CFDI)</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* SAT Product Code */}
-          <div>
-            <label htmlFor="sat_product_code" className="block text-sm font-medium text-gray-700 mb-1">
+          {/* SAT Product Code - AI-Powered Search */}
+          <div className="relative" ref={suggestionsRef}>
+            <label htmlFor="sat_code_search" className="block text-sm font-medium text-gray-700 mb-1">
               Clave Producto/Servicio (SAT) *
             </label>
-            <select
-              id="sat_product_code"
+
+            {/* Hidden input for form submission */}
+            <input
+              type="hidden"
               name="sat_product_code"
-              defaultValue={product?.sat_product_code || ''}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Select SAT code...</option>
-              {COMMON_SAT_PRODUCT_CODES.map((code) => (
-                <option key={code.code} value={code.code}>
-                  {code.code} - {code.name}
-                </option>
-              ))}
-            </select>
+              value={selectedSatCode?.code || ''}
+            />
+
+            {/* Selected code display */}
+            {selectedSatCode ? (
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex-1 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md">
+                  <span className="font-mono text-blue-700">{selectedSatCode.code}</span>
+                  {selectedSatCode.name && (
+                    <span className="text-gray-600 ml-2">- {selectedSatCode.name}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSatCode(null)}
+                  className="px-2 py-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                  title="Clear selection"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : null}
+
+            {/* Search input */}
+            <div className="relative">
+              <input
+                type="text"
+                id="sat_code_search"
+                value={satCodeSearch}
+                onChange={(e) => handleSatCodeSearch(e.target.value)}
+                onFocus={() => satCodeSuggestions.length > 0 && setShowSuggestions(true)}
+                placeholder={selectedSatCode ? "Search for a different code..." : "Type to search (e.g., 'laptop', 'consulting', 'software')"}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                autoComplete="off"
+              />
+              {isSearching && (
+                <div className="absolute right-3 top-2.5">
+                  <svg className="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            {/* AI-powered suggestions dropdown */}
+            {showSuggestions && satCodeSuggestions.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-200 text-xs text-gray-500 flex items-center gap-1">
+                  <span>✨</span> AI-powered semantic search ({satCodeSuggestions.length} results)
+                </div>
+                {satCodeSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion.code}
+                    type="button"
+                    onClick={() => handleSelectSatCode(suggestion)}
+                    className="w-full px-3 py-2 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-blue-600 text-sm">{suggestion.code}</span>
+                      {suggestion.score !== undefined && suggestion.score > 0 && (
+                        <span className="text-xs text-gray-400">
+                          {Math.round(suggestion.score * 100)}% match
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-700 truncate">{suggestion.name}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <p className="mt-1 text-xs text-gray-500">
-              Search the full SAT catalog at sat.gob.mx
+              Search 52,000+ SAT codes using AI semantic search
             </p>
+
+            {/* Quick select common codes */}
+            {!selectedSatCode && !satCodeSearch && (
+              <div className="mt-2">
+                <p className="text-xs text-gray-500 mb-1">Common codes:</p>
+                <div className="flex flex-wrap gap-1">
+                  {COMMON_SAT_PRODUCT_CODES.slice(0, 5).map((code) => (
+                    <button
+                      key={code.code}
+                      type="button"
+                      onClick={() => setSelectedSatCode({ code: code.code, name: code.name })}
+                      className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded text-gray-700"
+                    >
+                      {code.code}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* SAT Unit Code */}

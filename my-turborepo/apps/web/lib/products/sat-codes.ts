@@ -16,6 +16,10 @@ import {
   COMMON_UNIT_CODES,
   COMMON_PRODUCT_CODES,
 } from './types';
+import {
+  searchSATCodesAI,
+  SATSearchServiceUnavailableError,
+} from './ai-search-client';
 
 // ============================================================================
 // SAT Product Codes (ClaveProdServ)
@@ -171,21 +175,56 @@ export async function getSATProductCodesByDivision(
 /**
  * Suggest SAT product codes based on product description
  *
- * Uses text search and returns scored results. Designed to be
- * enhanced with AI/embeddings in the future.
+ * Uses AI-powered semantic search with fallback to PostgreSQL full-text search.
+ * The AI service uses multilingual embeddings for better matching of
+ * Spanish and English queries.
  *
  * @param description - Product name or description
  * @param limit - Maximum suggestions (default: 5)
+ * @param options - Optional search options
  * @returns Array of code suggestions with relevance scores
  */
 export async function suggestSATCode(
   description: string,
-  limit: number = 5
+  limit: number = 5,
+  options: { threshold?: number } = {}
 ): Promise<SATCodeSuggestion[]> {
   if (!description || description.trim().length < 2) {
     return [];
   }
 
+  // Try AI service first for semantic search
+  try {
+    const aiResults = await searchSATCodesAI(description, {
+      top_k: limit,
+      threshold: options.threshold ?? 0.35,
+    });
+
+    return aiResults.results.map((r) => ({
+      code: r.code,
+      name: r.name,
+      score: r.similarity_score ?? 0,
+      source: aiResults.search_type,
+    }));
+  } catch (error) {
+    // If AI service is unavailable, fall back to PostgreSQL text search
+    if (error instanceof SATSearchServiceUnavailableError) {
+      console.log('AI service unavailable, falling back to text search');
+      return suggestSATCodeFallback(description, limit);
+    }
+    // Re-throw other errors
+    throw error;
+  }
+}
+
+/**
+ * Fallback SAT code suggestion using PostgreSQL full-text search
+ * Used when the AI service is unavailable
+ */
+async function suggestSATCodeFallback(
+  description: string,
+  limit: number = 5
+): Promise<SATCodeSuggestion[]> {
   const supabase = await createClient();
 
   // Extract keywords from description
@@ -237,6 +276,7 @@ export async function suggestSATCode(
       code: item.code,
       name: item.name,
       score,
+      source: 'fulltext' as const,
     };
   });
 

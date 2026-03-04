@@ -281,6 +281,7 @@ export interface SATCodeSuggestion {
   code: string;
   name: string;
   score: number;                 // Relevance score 0-1
+  source?: 'semantic' | 'fulltext' | 'hybrid';  // Search method used
 }
 
 // ============================================================================

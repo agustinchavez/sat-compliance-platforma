@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireAuth } from '@/lib/auth'
 import { createProductService } from '@/lib/products/service'
-import { searchSATProductCodes, searchSATUnitCodes } from '@/lib/products/sat-codes'
+import { searchSATProductCodes, searchSATUnitCodes, suggestSATCode } from '@/lib/products/sat-codes'
 import type { Product, ProductCreateInput, ProductUpdateInput, ProductFilters } from '@/lib/products/types'
 
 export interface ProductFormState {
@@ -81,6 +81,14 @@ export async function searchProductCodes(query: string) {
  */
 export async function searchUnitCodes(query: string) {
   return searchSATUnitCodes(query, 20)
+}
+
+/**
+ * AI-powered SAT code suggestions
+ * Uses semantic search for better matching of product descriptions
+ */
+export async function suggestSATCodes(description: string, limit: number = 5) {
+  return suggestSATCode(description, limit)
 }
 
 /**
