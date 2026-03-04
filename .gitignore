@@ -1,9 +1,24 @@
-# Docs
-apps/web/# Python
+# Python
 .venv/
 venv/
 __pycache__/
 *.pyc
 
+# Environment files
+.env
+.env.local
+.env*.local
+
 # OS
 .DS_Store
+
+# Supabase temp files
+supabase/.temp/
+**/supabase/.temp/
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+.vscode/
