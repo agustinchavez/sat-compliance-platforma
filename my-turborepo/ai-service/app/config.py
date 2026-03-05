@@ -30,9 +30,37 @@ class Settings(BaseSettings):
     ocr_cache_ttl: int = 86400  # Cache OCR results 24 hours
     max_file_size_mb: int = 10  # Reject files larger than this
 
+    # LLM Configuration (Component 11)
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.1"  # Primary model (local, zero cost)
+    ollama_timeout_seconds: int = 60
+    openai_api_key: Optional[str] = None  # Optional fallback
+    openai_model: str = "gpt-4o-mini"  # Fallback model
+    llm_temperature: float = 0.3  # Lower = more factual responses
+    llm_max_tokens: int = 1024
+
+    # RAG Configuration (Component 11)
+    rag_top_k: int = 5  # Retrieved docs per query
+    rag_similarity_threshold: float = 0.4  # Min similarity for doc retrieval
+    knowledge_base_dir: str = "app/knowledge"  # Path to .md knowledge files
+
+    # Conversation Configuration (Component 11)
+    max_conversation_history: int = 20  # Messages to keep in context
+    conversation_summary_threshold: int = 15  # Summarize after this many messages
+    conversation_ttl_days: int = 30  # Days before conversation expires
+
+    # Internal Service Authentication (Component 11)
+    internal_api_key: str = "change-me-in-production"
+    allow_jwt_auth: bool = False  # Enable for local dev/testing
+
     class Config:
         env_file = ".env"
         extra = "ignore"
 
 
 settings = Settings()
+
+
+def get_settings() -> Settings:
+    """Get settings instance (for dependency injection)."""
+    return settings

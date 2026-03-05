@@ -302,3 +302,158 @@ TIENDA LOCAL
 TOTAL: $150.00
 FECHA: 01-ENE-2024
 """
+
+
+# ============================================================================
+# Tax Assistant Chatbot Fixtures (Component 11)
+# ============================================================================
+
+from app.config import Settings
+from app.models.conversation import (
+    ChatMessage,
+    ChatRequest,
+    ConversationContext,
+    ConversationHistory,
+    MessageRole,
+    RAGSource,
+)
+
+
+@pytest.fixture
+def chatbot_settings() -> Settings:
+    """Create settings for chatbot testing."""
+    return Settings(
+        supabase_url="http://localhost:54321",
+        supabase_service_key="test-service-key",
+        ollama_base_url="http://localhost:11434",
+        ollama_model="llama3.1",
+        openai_api_key="test-openai-key",
+        openai_model="gpt-4o-mini",
+        llm_temperature=0.3,
+        llm_max_tokens=1024,
+        rag_top_k=5,
+        rag_similarity_threshold=0.4,
+        max_conversation_history=20,
+        conversation_summary_threshold=15,
+        conversation_ttl_days=30,
+        internal_api_key="test-internal-key",
+    )
+
+
+@pytest.fixture
+def sample_conversation_context() -> ConversationContext:
+    """Sample conversation context for testing."""
+    return ConversationContext(
+        organization_name="Mi Empresa SA de CV",
+        tax_regime="601",
+        rfc="MIE180301AB9",
+        user_role="admin",
+        monthly_revenue_approx=500000,
+        employee_count_approx=25,
+    )
+
+
+@pytest.fixture
+def sample_chat_history() -> list[ChatMessage]:
+    """Sample conversation history for testing."""
+    return [
+        ChatMessage(
+            role=MessageRole.USER,
+            content="¿Cuáles son las tasas del IVA en México?",
+        ),
+        ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="Las tasas del IVA en México son: 16% tasa general, 8% zona fronteriza, y 0% para alimentos y medicinas.",
+        ),
+        ChatMessage(
+            role=MessageRole.USER,
+            content="¿Cómo calculo el IVA a pagar?",
+        ),
+        ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="El IVA a pagar se calcula como: IVA cobrado - IVA acreditable.",
+        ),
+    ]
+
+
+@pytest.fixture
+def sample_rag_sources() -> list[RAGSource]:
+    """Sample RAG sources for testing."""
+    return [
+        RAGSource(
+            doc_id="tax_guide_iva_tasas_0",
+            section_title="Tasas de IVA",
+            similarity_score=0.92,
+        ),
+        RAGSource(
+            doc_id="tax_guide_iva_calculo_0",
+            section_title="Cálculo del IVA",
+            similarity_score=0.85,
+        ),
+    ]
+
+
+@pytest.fixture
+def sample_knowledge_base_docs() -> list[dict]:
+    """Sample knowledge base documents for testing."""
+    return [
+        {
+            "doc_id": "tax_guide_iva_tasas_0",
+            "source_file": "tax_guide.md",
+            "section_title": "Tasas de IVA",
+            "content": "El IVA en México tiene las siguientes tasas: 16% tasa general, 8% zona fronteriza, 0% alimentos y medicinas.",
+            "content_hash": "abc123",
+            "chunk_index": 0,
+            "metadata": {"topics": ["IVA", "tasas"]},
+        },
+        {
+            "doc_id": "tax_guide_iva_calculo_0",
+            "source_file": "tax_guide.md",
+            "section_title": "Cálculo del IVA",
+            "content": "IVA a pagar = IVA cobrado - IVA acreditable. Ejemplo: Ventas $100,000 con IVA cobrado $16,000.",
+            "content_hash": "def456",
+            "chunk_index": 0,
+            "metadata": {"topics": ["IVA", "cálculo"]},
+        },
+        {
+            "doc_id": "cfdi_guide_types_0",
+            "source_file": "cfdi_guide.md",
+            "section_title": "Tipos de CFDI",
+            "content": "Los tipos de CFDI son: Ingreso (I), Egreso (E), Traslado (T), Nómina (N), Pago (P).",
+            "content_hash": "ghi789",
+            "chunk_index": 0,
+            "metadata": {"topics": ["CFDI", "tipos"]},
+        },
+    ]
+
+
+@pytest.fixture
+def mock_llm_response() -> tuple[str, str, int]:
+    """Mock LLM response tuple (content, model, tokens)."""
+    return (
+        "El IVA general en México es del 16%. Las tasas reducidas incluyen 8% para zona fronteriza y 0% para alimentos y medicinas básicas.",
+        "llama3.1",
+        85,
+    )
+
+
+@pytest.fixture
+def sample_chat_request() -> ChatRequest:
+    """Sample chat request for testing."""
+    return ChatRequest(
+        message="¿Cuánto es el IVA en México?",
+        conversation_id=None,
+        context=ConversationContext(
+            organization_name="Mi Empresa",
+            tax_regime="601",
+        ),
+    )
+
+
+@pytest.fixture
+def valid_auth_headers() -> dict[str, str]:
+    """Valid authentication headers for API testing."""
+    return {
+        "X-User-Id": "550e8400-e29b-41d4-a716-446655440000",
+        "X-Internal-Key": "test-internal-key",
+    }

@@ -70,3 +70,7 @@ class HealthResponse(BaseModel):
     codes_with_embeddings: int
     tesseract_available: bool = False
     tesseract_version: Optional[str] = None
+    # Assistant health (Component 11)
+    ollama_available: bool = False
+    openai_configured: bool = False
+    knowledge_base_documents: int = 0

@@ -4,10 +4,12 @@ import redis.asyncio as redis
 import subprocess
 
 from app.database import get_db
-from app.config import settings
+from app.config import settings, get_settings, Settings
 from app.models.sat_code import HealthResponse
 from app.services.embedding import EmbeddingService
 from app.services.vector_search import VectorSearchService
+from app.services.llm import LLMService
+from app.services.rag import RAGService
 from app.dependencies import get_embedding_service, get_vector_search
 
 router = APIRouter(tags=["Health"])
@@ -35,6 +37,7 @@ async def health_check(
     db: AsyncSession = Depends(get_db),
     embedding_service: EmbeddingService = Depends(get_embedding_service),
     vector_search: VectorSearchService = Depends(get_vector_search),
+    app_settings: Settings = Depends(get_settings),
 ) -> HealthResponse:
     """
     Returns service health including:
@@ -73,6 +76,21 @@ async def health_check(
     # Check Tesseract OCR availability
     tesseract_available, tesseract_version = _check_tesseract()
 
+    # Check Assistant/LLM health (Component 11)
+    ollama_available = False
+    openai_configured = False
+    knowledge_base_documents = 0
+    try:
+        llm_service = LLMService(app_settings)
+        ollama_available = await llm_service.check_ollama_available()
+        openai_configured = llm_service._openai_client is not None
+
+        rag_service = RAGService(app_settings, embedding_service)
+        kb_health = await rag_service.check_knowledge_base_health()
+        knowledge_base_documents = kb_health.get("document_count", 0)
+    except Exception:
+        pass  # Non-critical - service still works without LLM
+
     # Determine overall status
     if model_loaded and db_connected:
         status = "healthy"
@@ -90,6 +108,9 @@ async def health_check(
         codes_with_embeddings=codes_with_embeddings,
         tesseract_available=tesseract_available,
         tesseract_version=tesseract_version,
+        ollama_available=ollama_available,
+        openai_configured=openai_configured,
+        knowledge_base_documents=knowledge_base_documents,
     )
 
 
