@@ -3,7 +3,8 @@
  *
  * Public API for the CFDI XML generation package.
  * This package generates valid CFDI 4.0 XML documents from
- * Invoice data models (Component 12).
+ * Invoice data models (Component 12) and provides digital
+ * signature capabilities using CSD certificates (Component 14).
  */
 
 // ============================================
@@ -186,3 +187,50 @@ export {
   VALID_OBJETO_IMP,
   VALID_TIPO_RELACION,
 } from './constants.js';
+
+// ============================================
+// DIGITAL SIGNATURE (Component 14)
+// ============================================
+
+// Signer module - main signing API
+export {
+  signCFDI,
+  injectSignatureIntoXML,
+  verifyCFDISignature,
+} from './signer.js';
+
+export type {
+  SignCFDIInput,
+  SignCFDIResult,
+} from './signer.js';
+
+// Certificate module
+export {
+  loadCertificate,
+  extractNoCertificado,
+  encodeCertificateBase64,
+  extractRFC,
+  extractNombre,
+  getCertificateInfo,
+  validateCertificate,
+} from './certificate.js';
+
+// Crypto module
+export {
+  loadPrivateKey,
+  signData,
+  verifySignature,
+  encodeSignatureBase64,
+  isDERBuffer,
+  isCertificateDER,
+  isPrivateKeyDER,
+} from './crypto.js';
+
+// Error types
+export { CSDError } from './errors.js';
+
+export type {
+  CSDErrorCode,
+  CSDValidationResult,
+  CertificateInfo,
+} from './errors.js';

@@ -680,3 +680,114 @@ export function getCertificateStatusText(status: CertificateStatus): string {
 
   return statusText[status] || 'Unknown';
 }
+
+// ============================================================================
+// CSD Retrieval for Signing (Component 14 Integration)
+// ============================================================================
+
+/**
+ * Result of retrieving organization CSD for signing
+ */
+export interface OrganizationCSDResult {
+  /** Raw DER bytes of the .cer file */
+  cerBuffer: Buffer;
+  /** Raw DER bytes of the .key file (encrypted with PKCS#8) */
+  keyBuffer: Buffer;
+  /** Decrypted password string */
+  password: string;
+}
+
+/**
+ * Gets organization CSD files for CFDI signing.
+ *
+ * This function retrieves the raw DER bytes needed by Component 14's
+ * signing module. It decrypts the stored certificates and returns them
+ * in the format expected by the @repo/cfdi package.
+ *
+ * @param organizationId - Organization UUID
+ * @param userPassword - The password provided by the user for verification
+ * @returns CSD buffers and password for signing
+ * @throws Error if certificates not found or password incorrect
+ *
+ * @example
+ * ```ts
+ * const { cerBuffer, keyBuffer, password } = await getOrganizationCSD(orgId, userPassword);
+ *
+ * // Pass to @repo/cfdi signing module
+ * const signResult = await signCFDI({
+ *   cadenaOriginal,
+ *   cerBuffer,
+ *   keyBuffer,
+ *   password,
+ * });
+ * ```
+ */
+export async function getOrganizationCSD(
+  organizationId: string,
+  userPassword: string
+): Promise<OrganizationCSDResult> {
+  // Get organization data from database
+  const supabase = await createClient();
+  const { data: org, error } = await supabase
+    .from('organizations')
+    .select('cfdi_cert, cfdi_key, cfdi_password_hash')
+    .eq('id', organizationId)
+    .single();
+
+  if (error || !org) {
+    throw new Error('Organization not found');
+  }
+
+  if (!org.cfdi_cert || !org.cfdi_key) {
+    throw new Error('Organization does not have CSD certificates uploaded');
+  }
+
+  // Verify password
+  if (!org.cfdi_password_hash) {
+    throw new Error('Certificate password not configured');
+  }
+
+  const passwordValid = await verifyPassword(userPassword, org.cfdi_password_hash);
+  if (!passwordValid) {
+    throw new Error('Invalid certificate password');
+  }
+
+  // Decrypt certificate data
+  const parseEncryptedData = (data: unknown): EncryptedData => {
+    let certData: string;
+    if (Buffer.isBuffer(data)) {
+      certData = data.toString('utf8');
+    } else if (typeof data === 'string') {
+      if (data.startsWith('\\x')) {
+        const hexStr = data.slice(2);
+        certData = Buffer.from(hexStr, 'hex').toString('utf8');
+      } else {
+        certData = data;
+      }
+    } else {
+      certData = JSON.stringify(data);
+    }
+
+    const parsed = JSON.parse(certData);
+    if (parsed.type === 'Buffer' && parsed.data) {
+      const bufferData = Buffer.from(parsed.data);
+      return JSON.parse(bufferData.toString('utf8'));
+    } else if (parsed.encryptedData && parsed.iv && parsed.authTag) {
+      return parsed;
+    }
+    throw new Error('Unknown encrypted data format');
+  };
+
+  const encryptedCert = parseEncryptedData(org.cfdi_cert);
+  const encryptedKey = parseEncryptedData(org.cfdi_key);
+
+  // Decrypt to get raw DER bytes
+  const cerBuffer = decryptCertificate(encryptedCert);
+  const keyBuffer = decryptPrivateKey(encryptedKey);
+
+  return {
+    cerBuffer,
+    keyBuffer,
+    password: userPassword,
+  };
+}

@@ -1,0 +1,239 @@
+/**
+ * CFDI Signer Module (Component 14 - Step 4)
+ *
+ * Orchestrates the complete CFDI signing process:
+ * 1. Load and validate certificate
+ * 2. Load private key
+ * 3. Sign the cadena original
+ * 4. Inject signature into XML
+ *
+ * This is the main public-facing API for Component 14.
+ */
+
+import * as crypto from 'node:crypto';
+import { loadPrivateKey, signData, encodeSignatureBase64, verifySignature, isDERBuffer } from './crypto';
+import {
+  loadCertificate,
+  extractNoCertificado,
+  encodeCertificateBase64,
+  validateCertificate,
+  getCertificateInfo,
+} from './certificate';
+import { CSDError, type CertificateInfo } from './errors';
+
+// ============================================
+// SIGN CFDI INPUT/OUTPUT TYPES
+// ============================================
+
+export interface SignCFDIInput {
+  /** The cadena original string from Component 13's generateCadenaOriginal() */
+  cadenaOriginal: string;
+  /** Raw DER bytes of the .cer file (from Component 04's getOrganizationCSD()) */
+  cerBuffer: Buffer;
+  /** Raw DER bytes of the .key file (from Component 04's getOrganizationCSD()) */
+  keyBuffer: Buffer;
+  /** Plaintext password string (Component 04 handles decryption) */
+  password: string;
+  /** RFC of the CFDI issuer — used to verify cert matches invoice (optional) */
+  issuerRfc?: string;
+  /** Skip certificate expiration check (useful for testing with expired test certs) */
+  skipExpirationCheck?: boolean;
+}
+
+export interface SignCFDIResult {
+  /** The Sello attribute value (base64-encoded RSA-SHA256 signature) */
+  sello: string;
+  /** The NoCertificado attribute value (20-char SAT serial) */
+  noCertificado: string;
+  /** The Certificado attribute value (base64-encoded DER certificate) */
+  certificado: string;
+  /** Certificate information (for audit logging) */
+  certInfo: CertificateInfo;
+}
+
+// ============================================
+// MAIN SIGNING FUNCTION
+// ============================================
+
+/**
+ * Sign a CFDI cadena original with a CSD.
+ *
+ * This is the primary public API of Component 14.
+ *
+ * Flow:
+ * 1. Validate input buffers are DER format
+ * 2. Load certificate (X.509 DER)
+ * 3. Validate certificate (expiration, RFC match, issuer)
+ * 4. Load private key (PKCS#8 DER, decrypt with password)
+ * 5. Sign the cadena original (RSA-SHA256 PKCS#1 v1.5)
+ * 6. Encode signature as base64 → Sello
+ * 7. Extract NoCertificado (SAT hex-to-ASCII algorithm)
+ * 8. Encode certificate as base64 → Certificado
+ * 9. Return all values with certificate info
+ *
+ * @param input - The signing input parameters
+ * @returns SignCFDIResult with sello, noCertificado, certificado, and certInfo
+ * @throws CSDError for any validation or signing failure
+ */
+export async function signCFDI(input: SignCFDIInput): Promise<SignCFDIResult> {
+  const {
+    cadenaOriginal,
+    cerBuffer,
+    keyBuffer,
+    password,
+    issuerRfc,
+    skipExpirationCheck = false,
+  } = input;
+
+  // Step 1: Validate input buffers are DER format
+  if (!isDERBuffer(cerBuffer)) {
+    throw new CSDError(
+      'Certificate buffer does not appear to be DER format',
+      'CSD_CERT_LOAD_ERROR',
+      { bufferLength: cerBuffer.length, firstByte: cerBuffer[0] },
+    );
+  }
+
+  if (!isDERBuffer(keyBuffer)) {
+    throw new CSDError(
+      'Private key buffer does not appear to be DER format',
+      'CSD_KEY_LOAD_ERROR',
+      { bufferLength: keyBuffer.length, firstByte: keyBuffer[0] },
+    );
+  }
+
+  // Step 2: Load certificate
+  const cert = loadCertificate(cerBuffer);
+
+  // Step 3: Validate certificate
+  const validationResult = validateCertificate(cert, issuerRfc);
+
+  // Check for errors (optionally skip expiration check)
+  const filteredErrors = skipExpirationCheck
+    ? validationResult.errors.filter(e => e.code !== 'CSD_CERT_EXPIRED')
+    : validationResult.errors;
+
+  if (filteredErrors.length > 0) {
+    // Throw the first error (most relevant)
+    const firstError = filteredErrors[0];
+    throw new CSDError(
+      firstError.message,
+      firstError.code,
+      { allErrors: validationResult.errors, certInfo: validationResult.certInfo },
+    );
+  }
+
+  // Step 4: Load private key
+  const privateKey = loadPrivateKey(keyBuffer, password);
+
+  // Step 5: Sign the cadena original
+  const signatureBuffer = signData(cadenaOriginal, privateKey);
+
+  // Step 6: Encode signature as base64
+  const sello = encodeSignatureBase64(signatureBuffer);
+
+  // Step 7: Extract NoCertificado
+  const noCertificado = extractNoCertificado(cert);
+
+  // Step 8: Encode certificate as base64
+  const certificado = encodeCertificateBase64(cerBuffer);
+
+  // Step 9: Get certificate info
+  const certInfo = getCertificateInfo(cert, cerBuffer);
+
+  return {
+    sello,
+    noCertificado,
+    certificado,
+    certInfo,
+  };
+}
+
+// ============================================
+// XML SIGNATURE INJECTION
+// ============================================
+
+/**
+ * Inject the signing results into an unsigned CFDI XML string.
+ *
+ * Replaces the placeholder attributes generated by Component 13:
+ *   Sello=""  → Sello="..."
+ *   NoCertificado=""  → NoCertificado="..."
+ *   Certificado=""  → Certificado="..."
+ *
+ * Uses string replacement (not XML re-parsing) to preserve attribute
+ * order and whitespace — re-parsing would invalidate the cadena original.
+ *
+ * @param xml - Unsigned XML from Component 13's generateCFDI()
+ * @param signResult - Result from signCFDI()
+ * @returns Signed XML string ready for PAC submission
+ * @throws CSDError('CSD_XML_PLACEHOLDER_NOT_FOUND') if placeholders are missing
+ */
+export function injectSignatureIntoXML(xml: string, signResult: SignCFDIResult): string {
+  // Check that all placeholders exist
+  if (!xml.includes('Sello=""')) {
+    throw new CSDError(
+      'XML does not contain Sello="" placeholder. XML may already be signed or was not generated by Component 13.',
+      'CSD_XML_PLACEHOLDER_NOT_FOUND',
+      { missingPlaceholder: 'Sello=""' },
+    );
+  }
+
+  if (!xml.includes('NoCertificado=""')) {
+    throw new CSDError(
+      'XML does not contain NoCertificado="" placeholder. XML may already be signed or was not generated by Component 13.',
+      'CSD_XML_PLACEHOLDER_NOT_FOUND',
+      { missingPlaceholder: 'NoCertificado=""' },
+    );
+  }
+
+  if (!xml.includes('Certificado=""')) {
+    throw new CSDError(
+      'XML does not contain Certificado="" placeholder. XML may already be signed or was not generated by Component 13.',
+      'CSD_XML_PLACEHOLDER_NOT_FOUND',
+      { missingPlaceholder: 'Certificado=""' },
+    );
+  }
+
+  // Replace placeholders with actual values
+  return xml
+    .replace('Sello=""', `Sello="${signResult.sello}"`)
+    .replace('NoCertificado=""', `NoCertificado="${signResult.noCertificado}"`)
+    .replace('Certificado=""', `Certificado="${signResult.certificado}"`);
+}
+
+// ============================================
+// SIGNATURE VERIFICATION
+// ============================================
+
+/**
+ * Verify that the Sello in a signed CFDI is valid.
+ *
+ * This is primarily for testing and audit purposes.
+ * Component 15 (PAC) performs the authoritative verification.
+ *
+ * @param cadena - The cadena original that was signed (from Component 13)
+ * @param sello - The Sello attribute value from the signed XML
+ * @param cerBuffer - The .cer file that was used for signing
+ * @returns true if signature is valid, false otherwise (never throws)
+ */
+export function verifyCFDISignature(
+  cadena: string,
+  sello: string,
+  cerBuffer: Buffer,
+): boolean {
+  try {
+    const cert = loadCertificate(cerBuffer);
+    return verifySignature(cadena, sello, cert.publicKey);
+  } catch {
+    // Never throw — return false for any error
+    return false;
+  }
+}
+
+// ============================================
+// CONVENIENCE EXPORTS
+// ============================================
+
+// Re-export types for convenience
+export type { CertificateInfo } from './errors';

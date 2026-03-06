@@ -165,3 +165,28 @@ export type { ActionResult } from "./actions";
 // ============================================
 
 export type { OrganizationData, CustomerData } from "./repository";
+
+// ============================================
+// CFDI BRIDGE (Component 13 Integration)
+// ============================================
+
+export {
+  generateCFDIFromInvoice,
+  isCFDIGeneratorReady,
+  generateCFDIPreview,
+} from "./cfdi-bridge";
+
+export type { CFDIBridgeResult, CFDIBridgeError } from "./cfdi-bridge";
+
+// ============================================
+// SIGNING (Component 14 Integration)
+// ============================================
+
+export {
+  signInvoice,
+  verifyInvoiceSignature,
+  isSigningReady,
+  getSigningStatus,
+} from "./sign-invoice";
+
+export type { SignedInvoiceResult, SigningError } from "./sign-invoice";

@@ -150,6 +150,7 @@ export {
   // Retrieval
   getCertificateInfo,
   checkCertificateExpiration,
+  getOrganizationCSD, // Component 14 integration
 
   // Deletion
   deleteCertificates,
@@ -158,6 +159,8 @@ export {
   formatSerialNumber,
   getCertificateStatusText,
 } from './certificates';
+
+export type { OrganizationCSDResult } from './certificates';
 
 // ============================================================================
 // PAC Exports
