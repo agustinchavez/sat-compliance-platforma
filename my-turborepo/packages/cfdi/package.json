@@ -1,0 +1,31 @@
+{
+  "name": "@repo/cfdi",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "download-xslt": "tsx scripts/download-xslt.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "decimal.js": "^10.4.3",
+    "saxon-js": "^2.7.0",
+    "xmlbuilder2": "^3.1.1"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/node": "^22.15.3",
+    "tsx": "*",
+    "typescript": "5.9.2",
+    "vitest": "^4.0.8"
+  }
+}
