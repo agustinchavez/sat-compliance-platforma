@@ -190,3 +190,27 @@ export {
 } from "./sign-invoice";
 
 export type { SignedInvoiceResult, SigningError } from "./sign-invoice";
+
+// ============================================
+// STAMPING (Component 15 Integration)
+// ============================================
+
+export {
+  stampInvoice,
+  cancelStampedInvoice,
+  isStampingReady,
+  getStampingStatus,
+  isPACError,
+  formatStampingError,
+  PACError,
+} from "./stamp-invoice";
+
+export type {
+  StampedInvoiceResult,
+  CancelledInvoiceResult,
+  StampingError,
+  TFDData,
+  PACProvider,
+  PACEnvironment,
+  CancelMotivo,
+} from "./stamp-invoice";
