@@ -53,7 +53,7 @@
 | 13  | CFDI XML Generator        | 🟢     | 100%     | -       | 03-06-2026 | You   | Component 12     | Critical path      |
 | 14  | Digital Signature Service | 🟢     | 100%     | -       | 03-07-2026 | You   | Component 04, 13 | Need CSD certs     |
 | 15  | PAC Integration Service   | 🟢     | 100%     | -       | 03-09-2026 | You   | Component 14     | Need PAC account   |
-| 16  | PDF Generator Service     | 🔴     | 0%       | -       | -          | You   | Component 12     | Can build parallel |
+| 16  | PDF Generator Service     | 🟢     | 100%     | -       | 03-10-2026 | You   | Component 12     | Can build parallel |
 | 17  | Invoice Workflow Engine   | 🔴     | 0%       | -       | -          | You   | Component 12-15  | -                  |
 
 ---

@@ -226,3 +226,15 @@ export {
 } from "./generate-pdf";
 
 export type { GeneratePDFResult } from "./generate-pdf";
+
+// ============================================
+// WORKFLOW ENGINE (Component 17 Integration)
+// ============================================
+
+export {
+  processInvoice,
+  getProcessingStatus,
+  fireCancellationWorkflow,
+  retryFailedJob,
+  removeJob,
+} from "./process-invoice";
