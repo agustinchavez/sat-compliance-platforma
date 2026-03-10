@@ -214,3 +214,15 @@ export type {
   PACEnvironment,
   CancelMotivo,
 } from "./stamp-invoice";
+
+// ============================================
+// PDF GENERATION (Component 16 Integration)
+// ============================================
+
+export {
+  generateInvoicePDFAndStore,
+  checkPDFGenerationReady,
+  regenerateInvoicePDF,
+} from "./generate-pdf";
+
+export type { GeneratePDFResult } from "./generate-pdf";
