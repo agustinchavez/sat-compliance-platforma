@@ -247,3 +247,18 @@ export {
   recordAndProcessPayment,
   getInvoicePaymentSummary,
 } from "./record-payment";
+
+// ============================================
+// PAYMENT LINKS (Component 19 Integration)
+// ============================================
+
+export {
+  createInvoicePaymentLink,
+  expireInvoicePaymentLink,
+  getInvoicePaymentLinks,
+} from "./payment-link";
+
+export type {
+  CreateInvoicePaymentLinkInput,
+  CreateInvoicePaymentLinkResult,
+} from "./payment-link";
