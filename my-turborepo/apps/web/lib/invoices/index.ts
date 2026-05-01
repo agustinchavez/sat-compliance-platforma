@@ -238,3 +238,12 @@ export {
   retryFailedJob,
   removeJob,
 } from "./process-invoice";
+
+// ============================================
+// PAYMENT RECORDING (Component 18 Integration)
+// ============================================
+
+export {
+  recordAndProcessPayment,
+  getInvoicePaymentSummary,
+} from "./record-payment";

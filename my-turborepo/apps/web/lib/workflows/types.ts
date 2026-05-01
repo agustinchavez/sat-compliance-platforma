@@ -24,7 +24,8 @@ export type WorkflowEventType =
   | 'invoice.pdf_generated' // PDF created and stored
   | 'invoice.cancelled' // Invoice cancelled via motivo
   | 'invoice.payment_due_soon' // Reminder: payment due in N days
-  | 'invoice.payment_overdue'; // Reminder: payment is past due date
+  | 'invoice.payment_overdue' // Reminder: payment is past due date
+  | 'invoice.paid'; // Invoice fully paid via Payment Service (Component 18)
 
 /**
  * A workflow event representing something that happened to an invoice.
@@ -190,7 +191,8 @@ export type EmailTemplateId =
   | 'invoice_sent' // Invoice stamped, attaches PDF + XML
   | 'payment_reminder' // Payment due soon
   | 'payment_overdue' // Payment past due
-  | 'cancellation_notice'; // Invoice cancelled
+  | 'cancellation_notice' // Invoice cancelled
+  | 'payment_received'; // Payment recorded (Component 18)
 
 /**
  * Payload for email jobs.
@@ -276,6 +278,7 @@ export function isWorkflowEventType(value: string): value is WorkflowEventType {
     'invoice.cancelled',
     'invoice.payment_due_soon',
     'invoice.payment_overdue',
+    'invoice.paid',
   ];
   return validEvents.includes(value as WorkflowEventType);
 }
@@ -311,6 +314,7 @@ export function isEmailTemplateId(value: string): value is EmailTemplateId {
     'payment_reminder',
     'payment_overdue',
     'cancellation_notice',
+    'payment_received',
   ];
   return validTemplates.includes(value as EmailTemplateId);
 }

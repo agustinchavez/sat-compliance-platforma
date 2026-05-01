@@ -160,6 +160,27 @@ export const VALID_TRANSITIONS: TransitionRule[] = [
       'send_team_notification',
     ],
   },
+
+  // Invoice fully paid (from stamped or sent)
+  {
+    from: InvoiceStatus.STAMPED,
+    to: InvoiceStatus.PAID,
+    trigger: 'invoice.paid',
+    actions: [
+      'cancel_scheduled_reminders',
+      'send_team_notification',
+    ],
+  },
+
+  {
+    from: InvoiceStatus.SENT,
+    to: InvoiceStatus.PAID,
+    trigger: 'invoice.paid',
+    actions: [
+      'cancel_scheduled_reminders',
+      'send_team_notification',
+    ],
+  },
 ];
 
 // ============================================================================
@@ -299,6 +320,7 @@ export const ALL_EVENT_TYPES: WorkflowEventType[] = [
   'invoice.cancelled',
   'invoice.payment_due_soon',
   'invoice.payment_overdue',
+  'invoice.paid',
 ];
 
 /**
@@ -309,6 +331,7 @@ export const TRANSITION_EVENTS: WorkflowEventType[] = [
   'invoice.stamp_succeeded',
   'invoice.stamp_failed',
   'invoice.cancelled',
+  'invoice.paid',
 ];
 
 /**

@@ -54,17 +54,17 @@
 | 14  | Digital Signature Service | 🟢     | 100%     | -       | 03-07-2026 | You   | Component 04, 13 | Need CSD certs     |
 | 15  | PAC Integration Service   | 🟢     | 100%     | -       | 03-09-2026 | You   | Component 14     | Need PAC account   |
 | 16  | PDF Generator Service     | 🟢     | 100%     | -       | 03-10-2026 | You   | Component 12     | Can build parallel |
-| 17  | Invoice Workflow Engine   | 🔴     | 0%       | -       | -          | You   | Component 12-15  | -                  |
+| 17  | Invoice Workflow Engine   | 🟢     | 100%     | -       | 03-10-2026 | You   | Component 12-15  | -                  |
 
 ---
 
 ## Phase 5: Payments & Expenses (Week 13-15)
 
-| #   | Component                | Status | Progress | Started | Completed | Owner | Blockers         | Notes               |
-| --- | ------------------------ | ------ | -------- | ------- | --------- | ----- | ---------------- | ------------------- |
-| 18  | Payment Service          | 🔴     | 0%       | -       | -         | You   | Component 12     | -                   |
-| 19  | Payment Gateway (Stripe) | 🔴     | 0%       | -       | -         | You   | Component 18     | Need Stripe account |
-| 20  | Expense Service          | 🔴     | 0%       | -       | -         | You   | Component 03, 04 | -                   |
+| #   | Component                | Status | Progress | Started    | Completed  | Owner | Blockers         | Notes                             |
+| --- | ------------------------ | ------ | -------- | ---------- | ---------- | ----- | ---------------- | --------------------------------- |
+| 18  | Payment Service          | 🟢     | 100%     | 03-11-2026 | 03-11-2026 | You   | Component 12     | Complemento de Pagos 2.0 complete |
+| 19  | Payment Gateway (Stripe) | 🔴     | 0%       | -          | -          | You   | Component 18     | Need Stripe account               |
+| 20  | Expense Service          | 🔴     | 0%       | -          | -          | You   | Component 03, 04 | -                                 |
 
 ---
 
