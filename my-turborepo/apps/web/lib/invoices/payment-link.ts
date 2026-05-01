@@ -59,10 +59,9 @@ export async function createInvoicePaymentLink(
     .select(`
       id,
       organization_id,
-      total_amount,
-      folio,
+      total,
+      folio_number,
       receiver_name,
-      receiver_email,
       organizations (
         stripe_customer_id
       )
@@ -78,10 +77,10 @@ export async function createInvoicePaymentLink(
   const stripeInput = {
     invoiceId: invoice.id,
     organizationId: invoice.organization_id,
-    amountMXN: invoice.total_amount,
-    invoiceFolio: invoice.folio,
+    amountMXN: invoice.total,
+    invoiceFolio: invoice.folio_number,
     receiverName: invoice.receiver_name,
-    customerEmail: invoice.receiver_email || undefined,
+    customerEmail: undefined, // Email not on invoices table; can be passed via input if needed
     stripeCustomerId: (invoice.organizations as any)?.stripe_customer_id || undefined,
     expiresAt: input.expiresAt,
   };

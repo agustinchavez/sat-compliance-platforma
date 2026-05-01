@@ -793,6 +793,59 @@ console.log('[Stripe] Created checkout session for invoice inv-123');
 
 ---
 
+## Bug Fixes Applied
+
+The following bugs were identified and fixed during code review:
+
+### Bug 1: Incorrect Import Path
+**Issue:** `webhooks.ts` imported from `@/lib/invoices/payment` (non-existent)
+**Fix:** Changed to `@/lib/invoices/record-payment`
+
+### Bug 2: Missing Service Role Client Module
+**Issue:** All Stripe modules imported `@/lib/supabase/service-role-client` which didn't exist
+**Fix:** Created `lib/supabase/service-role-client.ts` with `createServiceRoleClient()` function
+
+### Bug 3: Wrong recordAndProcessPayment Signature
+**Issue:** Called with object argument instead of 3 positional arguments, used wrong field names
+**Before:**
+```typescript
+await recordAndProcessPayment({
+  invoiceId,
+  organizationId,
+  paymentMethod: 'stripe', // ❌ Wrong
+  amountMXN,               // ❌ Wrong field name
+  satFormaPago: formaPago, // ❌ Wrong field name
+});
+```
+**After:**
+```typescript
+const result = await recordAndProcessPayment(
+  invoiceId,
+  organizationId,
+  {
+    amount: amountMXN,
+    currency: 'MXN',
+    exchangeRate: 1.0,
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: '04', // SAT code
+    referenceNumber: paymentIntentId,
+    notes: `Pago en línea via Stripe...`,
+  }
+);
+paymentId = result.payment.id;
+```
+
+### Bug 4: Wrong Database Column Names
+**Issue:** Used incorrect column names in invoice queries
+- `total_amount` → `total`
+- `receiver_email` → Does not exist on invoices table
+- `folio` → `folio_number`
+- Checked `status='completed'` on payments → Should be `status='applied'` or check `invoice.payment_status='paid'`
+
+**Fix:** Updated all column references in `checkout.ts` and `payment-link.ts`
+
+---
+
 ## Future Enhancements
 
 ### Phase 2 Features

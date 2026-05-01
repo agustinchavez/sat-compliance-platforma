@@ -10,7 +10,7 @@ import { getStripeClient, STRIPE_CONFIG, fromCentavos } from './client';
 import { StripeGatewayError } from './errors';
 import { VerifiedWebhookEvent } from './types';
 import { createServiceRoleClient } from '@/lib/supabase/service-role-client';
-import { recordAndProcessPayment } from '@/lib/invoices/payment';
+import { recordAndProcessPayment } from '@/lib/invoices/record-payment';
 
 /**
  * Verifies Stripe webhook signature and parses the event.
@@ -159,29 +159,25 @@ export async function onCheckoutSessionCompleted(
   const paymentIntentId = session.payment_intent as string;
   const amountMXN = fromCentavos(paymentLink.amount_centavos);
 
-  // Map Stripe payment method to SAT FormaPago code
-  // Stripe only supports card payments in Mexico checkout by default
-  const formaPago = '04'; // SAT code '04' = Tarjeta de crédito
-
-  // 4. Record payment via Component 18
+  // 4. Record payment via Component 18 (using correct 3-arg signature)
   let paymentId: string;
   try {
-    paymentId = await recordAndProcessPayment({
+    const result = await recordAndProcessPayment(
       invoiceId,
       organizationId,
-      paymentMethod: 'stripe',
-      amountMXN,
-      satFormaPago: formaPago,
-      reference: paymentIntentId,
-      paymentDate: new Date(),
-      metadata: {
-        stripe_session_id: session.id,
-        stripe_payment_intent_id: paymentIntentId,
-        stripe_customer_id: session.customer as string,
-      },
-    });
+      {
+        amount: amountMXN,
+        currency: 'MXN',
+        exchangeRate: 1.0,
+        paymentDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD string
+        paymentMethod: '04', // SAT code '04' = Tarjeta de crédito
+        referenceNumber: paymentIntentId,
+        notes: `Pago en línea via Stripe — Session: ${session.id}, Customer: ${session.customer}`,
+      }
+    );
+    paymentId = result.payment.id;
   } catch (err) {
-    // Component 18 failed — log error but don't throw (already recorded in webhook table)
+    // Component 18 failed — log error and throw (already recorded in webhook table)
     throw new StripeGatewayError(
       'PAYMENT_RECORDING_FAILED',
       `Component 18 failed to record payment: ${(err as Error).message}`,

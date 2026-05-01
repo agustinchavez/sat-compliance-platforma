@@ -43,7 +43,7 @@ export async function createCheckoutSession(
   // 1. Validate invoice exists and is in correct status
   const { data: invoice, error: invoiceError } = await supabase
     .from('invoices')
-    .select('id, status, total_amount, folio, receiver_name, receiver_email')
+    .select('id, status, total, folio_number, receiver_name, payment_status')
     .eq('id', input.invoiceId)
     .single();
 
@@ -65,15 +65,8 @@ export async function createCheckoutSession(
     );
   }
 
-  // Check if invoice is already paid
-  const { data: existingPayment } = await supabase
-    .from('payments')
-    .select('id')
-    .eq('invoice_id', input.invoiceId)
-    .eq('status', 'completed')
-    .maybeSingle();
-
-  if (existingPayment) {
+  // Check if invoice is already paid (using payment_status column added by Component 18)
+  if (invoice.payment_status === 'paid') {
     throw new StripeGatewayError(
       'INVOICE_ALREADY_PAID',
       `Invoice ${input.invoiceId} is already paid`,
@@ -86,7 +79,7 @@ export async function createCheckoutSession(
   if (!stripeCustomerId) {
     stripeCustomerId = await getOrCreateStripeCustomer(
       input.organizationId,
-      input.customerEmail || invoice.receiver_email || '',
+      input.customerEmail || '',
       input.receiverName || invoice.receiver_name
     );
   }
