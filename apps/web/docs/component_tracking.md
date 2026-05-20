@@ -64,7 +64,7 @@
 | --- | ------------------------ | ------ | -------- | ---------- | ---------- | ----- | ---------------- | --------------------------------- |
 | 18  | Payment Service          | 🟢     | 100%     | 03-11-2026 | 03-11-2026 | You   | Component 12     | Complemento de Pagos 2.0 complete |
 | 19  | Payment Gateway (Stripe) | 🔴     | 0%       | -          | -          | You   | Component 18     | Need Stripe account               |
-| 20  | Expense Service          | 🔴     | 0%       | -          | -          | You   | Component 03, 04 | -                                 |
+| 20  | Expense Service          | 🟢     | 100%     | 05-01-2026 | 05-01-2026 | You   | Component 03, 04 | 90 tests, ISR compliance complete |
 
 ---
 
