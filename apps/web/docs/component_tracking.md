@@ -70,11 +70,11 @@
 
 ## Phase 6: Accounting (Week 16-18)
 
-| #   | Component                   | Status | Progress | Started | Completed | Owner | Blockers     | Notes |
-| --- | --------------------------- | ------ | -------- | ------- | --------- | ----- | ------------ | ----- |
-| 21  | Chart of Accounts Service   | 🔴     | 0%       | -       | -         | You   | Component 04 | -     |
-| 22  | Journal Entry Service       | 🔴     | 0%       | -       | -         | You   | Component 21 | -     |
-| 23  | Financial Reports Generator | 🔴     | 0%       | -       | -         | You   | Component 22 | -     |
+| #   | Component                   | Status | Progress | Started    | Completed  | Owner | Blockers     | Notes |
+| --- | --------------------------- | ------ | -------- | ---------- | ---------- | ----- | ------------ | ----- |
+| 21  | Chart of Accounts Service   | 🟢     | 100%     | 05-01-2026 | 05-01-2026 | You   | Component 04 | 19 tests, SAT Codigo Agrupador mapping, 3 templates (PyME/RESICO/General) |
+| 22  | Journal Entry Service       | 🟢     | 100%     | 05-01-2026 | 05-01-2026 | You   | Component 21 | 70 tests, double-entry, auto-posting (invoice/payment/expense), period close/reopen |
+| 23  | Financial Reports Generator | 🟢     | 100%     | 05-01-2026 | 05-01-2026 | You   | Component 22 | 65 tests, SAT XML Anexo 24 v1.3 (CT/BN/PL/XF/XC), trial balance, income statement, balance sheet |
 
 ---
 
