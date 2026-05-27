@@ -3,6 +3,9 @@
  *
  * Generates journal entries from invoices, payments, and expenses.
  * Each function is idempotent — will not create duplicate entries.
+ *
+ * FIX-4.7: Expense category mapping uses explicit enum map.
+ * FIX-4.4: COGS auto-posting for inventory-tracking orgs.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -19,8 +22,30 @@ const DEFAULT_ACCOUNTS = {
   proveedores: '2101',
   ventas: '4101',
   costoVentas: '5101',
+  inventarios: '1105',
   gastosAdmin: '6101',
   gastosVenta: '6102',
+};
+
+// FIX-4.7: Explicit expense category → account code mapping
+const EXPENSE_CATEGORY_MAP: Record<string, string> = {
+  // Sales-related expenses → Gastos de Venta
+  publicidad_marketing: DEFAULT_ACCOUNTS.gastosVenta,
+  comisiones: DEFAULT_ACCOUNTS.gastosVenta,
+  envios_fletes: DEFAULT_ACCOUNTS.gastosVenta,
+  promociones: DEFAULT_ACCOUNTS.gastosVenta,
+  representacion: DEFAULT_ACCOUNTS.gastosVenta,
+  // Admin expenses → Gastos de Administración (default)
+  nomina_sueldos: DEFAULT_ACCOUNTS.gastosAdmin,
+  renta_oficina: DEFAULT_ACCOUNTS.gastosAdmin,
+  servicios_profesionales: DEFAULT_ACCOUNTS.gastosAdmin,
+  papeleria: DEFAULT_ACCOUNTS.gastosAdmin,
+  software_licencias: DEFAULT_ACCOUNTS.gastosAdmin,
+  seguros: DEFAULT_ACCOUNTS.gastosAdmin,
+  mantenimiento: DEFAULT_ACCOUNTS.gastosAdmin,
+  depreciacion: DEFAULT_ACCOUNTS.gastosAdmin,
+  viajes: DEFAULT_ACCOUNTS.gastosAdmin,
+  impuestos_derechos: DEFAULT_ACCOUNTS.gastosAdmin,
 };
 
 /**
@@ -50,7 +75,7 @@ export async function autoPostFromInvoice(
   const existing = await findBySource(invoiceData.organizationId, 'invoice', invoiceData.id, supabase);
   if (existing) return existing;
 
-  const entryDate = invoiceData.issuedAt.split('T')[0];
+  const entryDate = invoiceData.issuedAt.split('T')[0] ?? invoiceData.issuedAt;
   const folio = [invoiceData.serie, invoiceData.folioNumber].filter(Boolean).join('-');
 
   const input: CreateJournalEntryInput = {
@@ -218,15 +243,93 @@ export async function autoPostFromExpense(
 }
 
 /**
- * Maps an expense category to the appropriate account code.
+ * FIX-4.7: Maps an expense category to the appropriate account code.
+ * Uses explicit category map instead of fragile substring matching.
  */
 function mapCategoryToAccount(category?: string): string {
   if (!category) return DEFAULT_ACCOUNTS.gastosAdmin;
 
-  const salesCategories = ['publicidad_marketing', 'comisiones'];
-  if (salesCategories.some(c => category.includes(c))) {
-    return DEFAULT_ACCOUNTS.gastosVenta;
+  const normalized = category.toLowerCase().trim();
+  return EXPENSE_CATEGORY_MAP[normalized] ?? DEFAULT_ACCOUNTS.gastosAdmin;
+}
+
+/**
+ * FIX-4.4: Creates a COGS journal entry alongside a revenue invoice.
+ * Only fires when the organization has inventory tracking enabled.
+ * Uses weighted average cost (WAC) from the inventory system.
+ *
+ * Debit: Costo de Ventas (COGS amount)
+ * Credit: Inventarios (COGS amount)
+ */
+export async function autoPostCogsFromInvoice(
+  cogsData: {
+    id: string;
+    organizationId: string;
+    invoiceId: string;
+    invoiceUuid?: string;
+    items: Array<{
+      productId: string;
+      productName: string;
+      quantity: number;
+      unitCost: number;
+    }>;
+    invoiceDate: string;
+  },
+  userId: string,
+  supabase: SupabaseClient
+): Promise<JournalEntry | null> {
+  // Check if org has inventory tracking enabled
+  const { data: orgSettings } = await supabase
+    .from('organizations')
+    .select('inventory_tracking_enabled')
+    .eq('id', cogsData.organizationId)
+    .single();
+
+  if (!orgSettings?.inventory_tracking_enabled) {
+    return null;
   }
 
-  return DEFAULT_ACCOUNTS.gastosAdmin;
+  // Idempotency: use a composite source key to avoid duplicate COGS entries
+  const cogsSourceId = `cogs-${cogsData.invoiceId}`;
+  const existing = await findBySource(cogsData.organizationId, 'invoice', cogsSourceId, supabase);
+  if (existing) return existing;
+
+  // Calculate total COGS from line items using WAC (weighted average cost)
+  const totalCogs = cogsData.items.reduce(
+    (sum, item) => sum + item.quantity * item.unitCost,
+    0
+  );
+
+  if (totalCogs <= 0) return null;
+
+  const itemSummary = cogsData.items
+    .map(i => `${i.productName} x${i.quantity}`)
+    .join(', ');
+
+  const input: CreateJournalEntryInput = {
+    entryDate: cogsData.invoiceDate.split('T')[0] ?? cogsData.invoiceDate,
+    polizaType: 'diario',
+    description: `Costo de ventas: ${itemSummary}`,
+    sourceType: 'invoice',
+    sourceId: cogsSourceId,
+    sourceUuidCfdi: cogsData.invoiceUuid,
+    currencyCode: 'MXN',
+    exchangeRate: 1.0,
+    lines: [
+      {
+        accountCode: DEFAULT_ACCOUNTS.costoVentas,
+        debit: totalCogs,
+        credit: 0,
+        description: `Costo de ventas - ${itemSummary}`,
+      },
+      {
+        accountCode: DEFAULT_ACCOUNTS.inventarios,
+        debit: 0,
+        credit: totalCogs,
+        description: `Salida de inventario - ${itemSummary}`,
+      },
+    ],
+  };
+
+  return createAndPostEntry(cogsData.organizationId, input, userId, supabase);
 }

@@ -13,6 +13,7 @@ export {
   deleteAccount,
   getAccountHierarchy,
   suggestAgrupadorCode,
+  suggestAgrupadorBySubstring,
   seedFromTemplate,
 } from './service';
 

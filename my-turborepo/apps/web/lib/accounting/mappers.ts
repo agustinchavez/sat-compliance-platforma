@@ -28,7 +28,9 @@ export function mapRowToAccount(row: any): Account {
     parentId: row.parent_id ?? undefined,
     materializedPath: row.materialized_path ?? row.code,
     isPostable: row.is_postable ?? true,
-    accountType: row.account_type_v2 ?? row.account_type,
+    // FIX-4.6: After consolidation, column is just account_type (enum).
+    // Fallback to account_type_v2 supports pre-migration reads.
+    accountType: row.account_type ?? row.account_type_v2 ?? 'asset',
     normalBalance: row.normal_balance ?? row.sat_naturaleza,
     currencyCode: row.currency_code ?? 'MXN',
     requiresUuid: row.requires_uuid ?? false,
@@ -95,6 +97,11 @@ export function mapRowToJournalEntryLine(row: any): JournalEntryLine {
     bankAccount: row.bank_account ?? undefined,
     bankCode: row.bank_code ?? undefined,
     paymentReference: row.payment_reference ?? undefined,
+    paymentDate: row.payment_date ?? undefined,
+    paymentBeneficiary: row.payment_beneficiary ?? undefined,
+    paymentBeneficiaryRfc: row.payment_beneficiary_rfc ?? undefined,
+    destBankAccount: row.dest_bank_account ?? undefined,
+    destBankCode: row.dest_bank_code ?? undefined,
     thirdPartyId: row.third_party_id ?? undefined,
     thirdPartyType: row.third_party_type ?? undefined,
     createdAt: row.created_at,

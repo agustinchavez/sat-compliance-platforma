@@ -42,8 +42,7 @@ export async function createDraftEntry(
   // Calculate totals
   const { totalDebit, totalCredit } = calculateTotals(parsed.lines);
 
-  // Generate entry number
-  const entryNumber = await repo.getNextEntryNumber(organizationId, year, supabase);
+  // Entry number is allocated atomically by the RPC function — no pre-allocation needed.
 
   // Prepare lines with resolved account IDs
   const lines = parsed.lines.map((line, index) => {
@@ -72,7 +71,6 @@ export async function createDraftEntry(
   return repo.insertJournalEntry(
     organizationId,
     {
-      entry_number: entryNumber,
       fiscal_period_id: period.id,
       entry_date: parsed.entryDate,
       poliza_type: parsed.polizaType,
@@ -157,8 +155,8 @@ export async function reverseEntry(
 
   validateForReversal(original);
 
-  // Reversal date must be >= original date
-  if (reversalDate < original.entryDate) {
+  // FIX-4.8: Use Date objects for reliable comparison regardless of format
+  if (new Date(reversalDate) < new Date(original.entryDate)) {
     throw new AccountingError(
       'INVALID_ENTRY_DATE',
       'La fecha de reversión debe ser igual o posterior a la fecha original'
@@ -191,12 +189,10 @@ export async function reverseEntry(
   const month = reversalDate_.getMonth() + 1;
 
   const period = await repo.getOrCreateFiscalPeriod(original.organizationId, year, month, supabase);
-  const entryNumber = await repo.getNextEntryNumber(original.organizationId, year, supabase);
 
   const reversal = await repo.insertJournalEntry(
     original.organizationId,
     {
-      entry_number: entryNumber,
       fiscal_period_id: period.id,
       entry_date: reversalDate,
       poliza_type: original.polizaType,

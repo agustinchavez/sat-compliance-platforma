@@ -128,6 +128,47 @@ describe('Catalog XML Generation', () => {
     expect(xml).toContain('CodAgrup="101.01"');
   });
 
+  it('should throw when Nivel 1 account has empty CodAgrup', () => {
+    expect(() => generateCatalogXml({
+      rfc: 'XAXX010101XXX',
+      month: 1,
+      year: 2026,
+      accounts: [makeAccount({ satAgrupadorCode: '', satNivel: 1 })],
+    })).toThrow(/CodAgrup/);
+  });
+
+  it('should throw when Nivel 2 account has missing CodAgrup', () => {
+    expect(() => generateCatalogXml({
+      rfc: 'XAXX010101XXX',
+      month: 1,
+      year: 2026,
+      accounts: [makeAccount({ satAgrupadorCode: undefined, satNivel: 2 })],
+    })).toThrow(/CodAgrup/);
+  });
+
+  it('should omit CodAgrup for Nivel >= 3 without it', () => {
+    const xml = generateCatalogXml({
+      rfc: 'XAXX010101XXX',
+      month: 1,
+      year: 2026,
+      accounts: [makeAccount({ satAgrupadorCode: undefined, satNivel: 4 })],
+    });
+
+    expect(xml).not.toContain('CodAgrup=""');
+    expect(xml).not.toContain('CodAgrup');
+  });
+
+  it('should not emit empty CodAgrup attribute', () => {
+    const xml = generateCatalogXml({
+      rfc: 'XAXX010101XXX',
+      month: 1,
+      year: 2026,
+      accounts: [makeAccount({ satAgrupadorCode: '101.01' })],
+    });
+
+    expect(xml).not.toContain('CodAgrup=""');
+  });
+
   it('should include Nivel attribute', () => {
     const xml = generateCatalogXml({
       rfc: 'XAXX010101XXX',

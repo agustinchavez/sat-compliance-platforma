@@ -15,44 +15,39 @@ import type {
 } from '../types';
 import { mapRowToJournalEntry, mapRowToJournalEntryLine, mapRowToFiscalPeriod } from '../mappers';
 import { AccountingError } from '../errors';
-import { formatEntryNumber } from '../validation';
 
 /**
- * Gets the next entry number for an organization in a given year.
+ * Atomically allocates the next entry number for an organization in a given year.
+ * Uses a Postgres function backed by a counter table — race-condition-free.
  */
 export async function getNextEntryNumber(
   organizationId: string,
   year: number,
   supabase: SupabaseClient
 ): Promise<string> {
-  const prefix = `${year}-`;
   const { data, error } = await supabase
-    .from('journal_entries')
-    .select('entry_number')
-    .eq('organization_id', organizationId)
-    .like('entry_number', `${prefix}%`)
-    .order('entry_number', { ascending: false })
-    .limit(1);
+    .rpc('next_journal_entry_number', {
+      p_organization_id: organizationId,
+      p_year: year,
+    });
 
-  if (error) throw new AccountingError('VALIDATION_ERROR', error.message);
-
-  let nextSeq = 1;
-  if (data && data.length > 0) {
-    const lastNum = data[0].entry_number;
-    const lastSeq = parseInt(lastNum.replace(prefix, ''), 10);
-    nextSeq = lastSeq + 1;
+  if (error) {
+    throw new AccountingError('VALIDATION_ERROR', `No se pudo generar número de póliza: ${error.message}`);
   }
-
-  return formatEntryNumber(year, nextSeq);
+  if (!data) {
+    throw new AccountingError('VALIDATION_ERROR', 'Función de numeración no retornó valor');
+  }
+  return data as string;
 }
 
 /**
- * Creates a journal entry with its lines in a single operation.
+ * Atomically creates a journal entry with its lines via RPC.
+ * Entry number is allocated server-side inside the function (do NOT pre-allocate).
  */
 export async function insertJournalEntry(
   organizationId: string,
   data: {
-    entry_number: string;
+    entry_number?: string;
     fiscal_period_id: string;
     entry_date: string;
     poliza_type: string;
@@ -88,37 +83,22 @@ export async function insertJournalEntry(
   }>,
   supabase: SupabaseClient
 ): Promise<JournalEntry> {
-  // Insert entry header
-  const { data: entryRow, error: entryError } = await supabase
-    .from('journal_entries')
-    .insert({
-      organization_id: organizationId,
-      ...data,
-    })
-    .select()
-    .single();
+  const { data: result, error } = await supabase.rpc('insert_journal_entry_atomic', {
+    p_organization_id: organizationId,
+    p_entry_data: data,
+    p_lines: lines,
+  });
 
-  if (entryError) {
-    throw new AccountingError('VALIDATION_ERROR', `Error al crear póliza: ${entryError.message}`);
+  if (error) {
+    throw new AccountingError(
+      'VALIDATION_ERROR',
+      `Error al crear póliza: ${error.message}`
+    );
   }
 
-  // Insert lines
-  const lineRows = lines.map(line => ({
-    organization_id: organizationId,
-    journal_entry_id: entryRow.id,
-    ...line,
-  }));
-
-  const { data: insertedLines, error: linesError } = await supabase
-    .from('journal_entry_lines')
-    .insert(lineRows)
-    .select();
-
-  if (linesError) {
-    throw new AccountingError('VALIDATION_ERROR', `Error al crear líneas: ${linesError.message}`);
-  }
-
-  const mappedLines = (insertedLines || []).map(mapRowToJournalEntryLine);
+  const entryRow = result.entry;
+  const lineRows = result.lines || [];
+  const mappedLines = lineRows.map(mapRowToJournalEntryLine);
   return mapRowToJournalEntry(entryRow, mappedLines);
 }
 
@@ -133,6 +113,7 @@ export async function getEntryById(
     .from('journal_entries')
     .select('*')
     .eq('id', entryId)
+    .is('deleted_at', null)
     .maybeSingle();
 
   if (error) throw new AccountingError('VALIDATION_ERROR', error.message);
@@ -176,7 +157,8 @@ export async function updateEntry(
 }
 
 /**
- * Deletes a draft journal entry and its lines.
+ * Soft-deletes a draft journal entry (FIX-4.1).
+ * Sets deleted_at instead of hard deleting.
  */
 export async function deleteEntry(
   entryId: string,
@@ -184,7 +166,7 @@ export async function deleteEntry(
 ): Promise<void> {
   const { error } = await supabase
     .from('journal_entries')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', entryId);
 
   if (error) throw new AccountingError('VALIDATION_ERROR', `Error al eliminar póliza: ${error.message}`, entryId);
@@ -202,7 +184,8 @@ export async function listEntries(
   let query = supabase
     .from('journal_entries')
     .select('*', { count: 'exact' })
-    .eq('organization_id', organizationId);
+    .eq('organization_id', organizationId)
+    .is('deleted_at', null);
 
   if (filters.status) {
     if (Array.isArray(filters.status)) {
@@ -268,6 +251,8 @@ export async function findBySource(
     .eq('organization_id', organizationId)
     .eq('source_type', sourceType)
     .eq('source_id', sourceId)
+    .neq('status', 'reversed')
+    .is('deleted_at', null)
     .maybeSingle();
 
   if (error) throw new AccountingError('VALIDATION_ERROR', error.message);
@@ -370,6 +355,7 @@ export async function getPostedEntriesForPeriod(
     .eq('organization_id', organizationId)
     .eq('fiscal_period_id', periodId)
     .eq('status', 'posted')
+    .is('deleted_at', null)
     .order('entry_number', { ascending: true });
 
   if (error) throw new AccountingError('VALIDATION_ERROR', error.message);

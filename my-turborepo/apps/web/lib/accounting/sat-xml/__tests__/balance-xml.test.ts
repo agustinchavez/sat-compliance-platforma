@@ -86,6 +86,16 @@ describe('Balance XML Generation', () => {
     expect(xml).toContain('FechaModBal="2026-02-15"');
   });
 
+  it('should throw when TipoEnvio=C without FechaModBal', () => {
+    expect(() => generateBalanceXml({
+      rfc: 'XAXX010101XXX',
+      month: 1,
+      year: 2026,
+      tipo: 'C',
+      rows: [],
+    })).toThrow(/FechaModBal is required/);
+  });
+
   it('should generate Ctas elements', () => {
     const xml = generateBalanceXml({
       rfc: 'XAXX010101XXX',
@@ -165,6 +175,48 @@ describe('Balance XML Generation', () => {
     expect(xml).toContain('NumCta="2101"');
     expect(xml).toContain('SaldoIni="5000.00"');
     expect(xml).toContain('SaldoFin="7000.00"');
+  });
+
+  it('should preserve negative saldo for debit-natural account with credit balance', () => {
+    const xml = generateBalanceXml({
+      rfc: 'XAXX010101XXX',
+      month: 1,
+      year: 2026,
+      tipo: 'N',
+      rows: [makeRow({
+        accountCode: '1101001',
+        satNaturaleza: 'D',
+        openingDebit: 0,
+        openingCredit: 500,
+        periodDebit: 0,
+        periodCredit: 0,
+        closingDebit: 0,
+        closingCredit: 500,
+      })],
+    });
+
+    // Signed: negative indicates contra-nature balance
+    expect(xml).toContain('SaldoIni="-500.00"');
+    expect(xml).toContain('SaldoFin="-500.00"');
+  });
+
+  it('should preserve positive saldo for natural balances', () => {
+    const xml = generateBalanceXml({
+      rfc: 'XAXX010101XXX',
+      month: 1,
+      year: 2026,
+      tipo: 'N',
+      rows: [makeRow({
+        accountCode: '1101001',
+        satNaturaleza: 'D',
+        openingDebit: 1000,
+        openingCredit: 0,
+        closingDebit: 1000,
+        closingCredit: 0,
+      })],
+    });
+
+    expect(xml).toContain('SaldoIni="1000.00"');
   });
 
   it('should handle multiple rows', () => {

@@ -32,6 +32,7 @@ export type AccountingErrorCode =
   // Balance errors
   | 'SNAPSHOT_NOT_FOUND'
   | 'SNAPSHOT_SEALED'
+  | 'CLOSE_VALIDATION_FAILED'
   // FX errors
   | 'EXCHANGE_RATE_REQUIRED'
   | 'EXCHANGE_RATE_NOT_FOUND'

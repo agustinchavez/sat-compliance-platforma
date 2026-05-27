@@ -19,6 +19,27 @@ export interface BalanceXmlInput {
 }
 
 /**
+ * Computes the SAT-spec saldo for an account.
+ *
+ * Per Anexo 24 v1.3: "De acuerdo a la naturaleza de la cuenta o subcuenta,
+ * deberá de corresponder el saldo inicial, de lo contrario se entenderá
+ * que es un saldo inicial de naturaleza inversa."
+ *
+ * A positive value means the balance matches the naturaleza;
+ * a negative value signals an inverse balance (e.g., a debit-natural
+ * account with a credit balance).
+ */
+function computeSaldoForNaturaleza(
+  naturaleza: 'D' | 'A',
+  debitTotal: number,
+  creditTotal: number
+): number {
+  return naturaleza === 'D'
+    ? debitTotal - creditTotal
+    : creditTotal - debitTotal;
+}
+
+/**
  * Generates the BN/BC (Balanza de Comprobación) XML.
  *
  * Structure per Anexo 24 v1.3:
@@ -31,6 +52,13 @@ export function generateBalanceXml(input: BalanceXmlInput): string {
   const { rfc, month, year, tipo, rows, fechaModBal } = input;
   const mes = String(month).padStart(2, '0');
   const anio = String(year);
+
+  // Validate conditional requirements
+  if (tipo === 'C') {
+    if (!fechaModBal) {
+      throw new Error('Anexo 24: FechaModBal is required when TipoEnvio=C (complementaria)');
+    }
+  }
 
   const lines: string[] = [XML_DECLARATION];
 
@@ -48,20 +76,24 @@ export function generateBalanceXml(input: BalanceXmlInput): string {
   lines.push(`<BCE:Balanza ${rootAttrs}>`);
 
   for (const row of rows) {
-    // Calculate saldo (balance) based on naturaleza
-    const saldoIni = row.satNaturaleza === 'D'
-      ? row.openingDebit - row.openingCredit
-      : row.openingCredit - row.openingDebit;
-    const saldoFin = row.satNaturaleza === 'D'
-      ? row.closingDebit - row.closingCredit
-      : row.closingCredit - row.closingDebit;
+    // Sign preserved: negative saldo signals contra-nature balance per Anexo 24
+    const saldoIni = computeSaldoForNaturaleza(
+      row.satNaturaleza as 'D' | 'A',
+      row.openingDebit,
+      row.openingCredit
+    );
+    const saldoFin = computeSaldoForNaturaleza(
+      row.satNaturaleza as 'D' | 'A',
+      row.closingDebit,
+      row.closingCredit
+    );
 
     let accountLine = '  <BCE:Ctas';
     accountLine += attr('NumCta', row.accountCode);
-    accountLine += attr('SaldoIni', toSatDecimal(Math.abs(saldoIni)));
+    accountLine += attr('SaldoIni', toSatDecimal(saldoIni));
     accountLine += attr('Debe', toSatDecimal(row.periodDebit));
     accountLine += attr('Haber', toSatDecimal(row.periodCredit));
-    accountLine += attr('SaldoFin', toSatDecimal(Math.abs(saldoFin)));
+    accountLine += attr('SaldoFin', toSatDecimal(saldoFin));
     accountLine += '/>';
 
     lines.push(accountLine);

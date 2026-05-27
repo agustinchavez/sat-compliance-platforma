@@ -19,6 +19,7 @@ export {
   autoPostFromInvoice,
   autoPostFromPayment,
   autoPostFromExpense,
+  autoPostCogsFromInvoice,
 } from './auto-posting';
 
 // Validation

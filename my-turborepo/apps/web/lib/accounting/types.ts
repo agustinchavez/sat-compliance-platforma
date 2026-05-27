@@ -152,6 +152,11 @@ export interface JournalEntryLine {
   bankAccount?: string;
   bankCode?: string;
   paymentReference?: string;
+  paymentDate?: string;
+  paymentBeneficiary?: string;
+  paymentBeneficiaryRfc?: string;
+  destBankAccount?: string;
+  destBankCode?: string;
   // Third party
   thirdPartyId?: string;
   thirdPartyType?: ThirdPartyType;

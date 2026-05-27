@@ -334,19 +334,19 @@ describe('Chart of Accounts Service', () => {
   });
 
   describe('suggestAgrupadorCode', () => {
-    it('should return suggestions for asset accounts', () => {
-      const suggestions = suggestAgrupadorCode('Caja', 'asset');
+    it('should return suggestions for asset accounts', async () => {
+      const suggestions = await suggestAgrupadorCode('Caja', 'asset');
       expect(suggestions.length).toBeGreaterThan(0);
-      expect(suggestions[0].code).toContain('101');
+      expect(suggestions[0]!.code).toContain('101');
     });
 
-    it('should return suggestions for liability accounts', () => {
-      const suggestions = suggestAgrupadorCode('Proveedores', 'liability');
+    it('should return suggestions for liability accounts', async () => {
+      const suggestions = await suggestAgrupadorCode('Proveedores', 'liability');
       expect(suggestions.length).toBeGreaterThan(0);
     });
 
-    it('should return empty for unknown names', () => {
-      const suggestions = suggestAgrupadorCode('ZZZZXXXX', 'asset');
+    it('should return empty for unknown names', async () => {
+      const suggestions = await suggestAgrupadorCode('ZZZZXXXX', 'asset');
       expect(suggestions).toHaveLength(0);
     });
   });

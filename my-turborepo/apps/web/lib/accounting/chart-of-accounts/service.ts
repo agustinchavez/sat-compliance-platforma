@@ -203,9 +203,62 @@ export { validateChartForFiling } from './validation';
 
 /**
  * Suggests a SAT agrupador code based on account name and type.
- * This is a heuristic fallback — AI-powered suggestion is stubbed.
+ * FIX-4.3: Tries AI-powered semantic search first, falls back to substring match.
  */
-export function suggestAgrupadorCode(
+export async function suggestAgrupadorCode(
+  accountName: string,
+  accountType: AccountType,
+  options?: { aiServiceUrl?: string }
+): Promise<SuggestedAgrupador[]> {
+  // Tier 1: Try AI-powered suggestion if service URL is configured
+  const aiUrl = options?.aiServiceUrl ?? process.env.AI_SERVICE_URL;
+  if (aiUrl) {
+    try {
+      const aiResults = await fetchAiAgrupadorSuggestions(aiUrl, accountName, accountType);
+      if (aiResults.length > 0) return aiResults;
+    } catch {
+      // Fall through to substring match
+    }
+  }
+
+  // Tier 2: Substring/keyword match (existing heuristic)
+  return suggestAgrupadorBySubstring(accountName, accountType);
+}
+
+/**
+ * Fetches AI-powered agrupador suggestions from the AI service.
+ */
+async function fetchAiAgrupadorSuggestions(
+  baseUrl: string,
+  accountName: string,
+  accountType: AccountType
+): Promise<SuggestedAgrupador[]> {
+  const url = `${baseUrl}/sat/agrupador-search`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: accountName,
+      account_type: accountType,
+      top_k: 5,
+    }),
+    signal: AbortSignal.timeout(3000),
+  });
+
+  if (!response.ok) return [];
+
+  const data = await response.json();
+  return (data.results ?? []).map((r: any) => ({
+    code: r.code,
+    name: r.name,
+    similarity: r.similarity ?? r.score ?? 0.5,
+  }));
+}
+
+/**
+ * Substring-based agrupador suggestion (heuristic fallback).
+ */
+export function suggestAgrupadorBySubstring(
   accountName: string,
   accountType: AccountType
 ): SuggestedAgrupador[] {
@@ -214,8 +267,7 @@ export function suggestAgrupadorCode(
 
   const nameLower = accountName.toLowerCase();
   const suggestions = SAT_AGRUPADOR_CATALOG.filter(entry => {
-    // Compare using the integer part of the code (before the dot)
-    const intPart = parseInt(entry.code.split('.')[0], 10);
+    const intPart = parseInt(entry.code.split('.')[0] ?? '0', 10);
     if (intPart < range.min || intPart > range.max) return false;
     const entryNameLower = entry.name.toLowerCase();
     return entryNameLower.includes(nameLower) || nameLower.includes(entryNameLower);

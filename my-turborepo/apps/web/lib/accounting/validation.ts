@@ -67,9 +67,13 @@ export function validateLineAmounts(lines: Pick<CreateJournalEntryLineInput, 'de
 
 /**
  * Validates that an entry date falls within the fiscal period's date range.
+ * FIX-4.8: Uses Date objects for reliable comparison regardless of format.
  */
 export function isDateInPeriod(entryDate: string, periodStart: string, periodEnd: string): boolean {
-  return entryDate >= periodStart && entryDate <= periodEnd;
+  const entry = new Date(entryDate);
+  const start = new Date(periodStart);
+  const end = new Date(periodEnd);
+  return entry >= start && entry <= end;
 }
 
 /**
