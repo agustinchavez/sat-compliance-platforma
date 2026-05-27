@@ -7,29 +7,42 @@ import { processRefund } from '../refunds';
 import { StripeGatewayError } from '../errors';
 import type { RefundInput } from '../types';
 
-// Mock Stripe client
+// Shared mock for refunds.create — same instance returned by every getStripeClient() call
+const mockRefundsCreate = vi.fn((params: any) => {
+  if (params.payment_intent === 'pi_error') {
+    throw new Error('Stripe API error');
+  }
+  return Promise.resolve({
+    id: 're_test_123',
+    amount: params.amount || 116050,
+    status: 'succeeded',
+  });
+});
+
+const mockStripeInstance = {
+  refunds: { create: mockRefundsCreate },
+};
+
 vi.mock('../client', () => ({
-  getStripeClient: vi.fn(() => ({
-    refunds: {
-      create: vi.fn((params) => {
-        if (params.payment_intent === 'pi_error') {
-          throw new Error('Stripe API error');
-        }
-        return Promise.resolve({
-          id: 're_test_123',
-          amount: params.amount || 116050,
-          status: 'succeeded',
-        });
-      }),
-    },
-  })),
-  toCentavos: vi.fn((amount) => Math.round(amount * 100)),
-  fromCentavos: vi.fn((centavos) => centavos / 100),
+  getStripeClient: vi.fn(() => mockStripeInstance),
+  toCentavos: vi.fn((amount: number) => Math.round(amount * 100)),
+  fromCentavos: vi.fn((centavos: number) => centavos / 100),
 }));
 
 describe('Stripe Refunds', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Restore default behavior
+    mockRefundsCreate.mockImplementation((params: any) => {
+      if (params.payment_intent === 'pi_error') {
+        throw new Error('Stripe API error');
+      }
+      return Promise.resolve({
+        id: 're_test_123',
+        amount: params.amount || 116050,
+        status: 'succeeded',
+      });
+    });
   });
 
   describe('processRefund', () => {
@@ -117,9 +130,7 @@ describe('Stripe Refunds', () => {
     });
 
     it('should map succeeded status correctly', async () => {
-      const { getStripeClient } = await import('../client');
-      const mockStripe = getStripeClient();
-      vi.mocked(mockStripe.refunds.create).mockResolvedValueOnce({
+      mockRefundsCreate.mockResolvedValueOnce({
         id: 're_test_123',
         amount: 116050,
         status: 'succeeded',
@@ -130,9 +141,7 @@ describe('Stripe Refunds', () => {
     });
 
     it('should map pending status correctly', async () => {
-      const { getStripeClient } = await import('../client');
-      const mockStripe = getStripeClient();
-      vi.mocked(mockStripe.refunds.create).mockResolvedValueOnce({
+      mockRefundsCreate.mockResolvedValueOnce({
         id: 're_test_123',
         amount: 116050,
         status: 'pending',
@@ -143,9 +152,7 @@ describe('Stripe Refunds', () => {
     });
 
     it('should map failed status correctly', async () => {
-      const { getStripeClient } = await import('../client');
-      const mockStripe = getStripeClient();
-      vi.mocked(mockStripe.refunds.create).mockResolvedValueOnce({
+      mockRefundsCreate.mockResolvedValueOnce({
         id: 're_test_123',
         amount: 116050,
         status: 'failed',

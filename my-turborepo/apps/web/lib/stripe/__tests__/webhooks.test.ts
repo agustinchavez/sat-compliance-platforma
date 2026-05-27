@@ -14,7 +14,15 @@ import {
 import { StripeGatewayError } from '../errors';
 import type { VerifiedWebhookEvent } from '../types';
 
-// Mock dependencies
+// --- Shared mock state ---
+let mockWebhookEventData: any = null;
+let mockPaymentLinkData: any = { id: 'link-123', amount_centavos: 116050 };
+let mockPaymentLinkUpdateError: any = null;
+
+// Track calls for assertions
+const mockFromFn = vi.fn();
+const mockInsertFn = vi.fn();
+
 vi.mock('../client', () => ({
   getStripeClient: vi.fn(() => ({
     webhooks: {
@@ -41,20 +49,31 @@ vi.mock('../client', () => ({
       }),
     },
   })),
-  fromCentavos: vi.fn((centavos) => centavos / 100),
+  STRIPE_CONFIG: {
+    CURRENCY: 'mxn',
+    SUCCESS_URL_PATH: '/invoices/{invoiceId}/payment-success',
+    CANCEL_URL_PATH: '/invoices/{invoiceId}',
+    PAYMENT_LINK_EXPIRY_DAYS: 30,
+    WEBHOOK_TOLERANCE_SECONDS: 300,
+  },
+  fromCentavos: vi.fn((centavos: number) => centavos / 100),
 }));
 
 vi.mock('@/lib/supabase/service-role-client', () => ({
   createServiceRoleClient: vi.fn(() => ({
-    from: vi.fn((table) => {
+    from: vi.fn((table: string) => {
+      mockFromFn(table);
       if (table === 'stripe_webhook_events') {
         return {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
-              maybeSingle: vi.fn(() => Promise.resolve({ data: null })),
+              maybeSingle: vi.fn(() => Promise.resolve({ data: mockWebhookEventData })),
             })),
           })),
-          insert: vi.fn(() => Promise.resolve({ error: null })),
+          insert: vi.fn((data: any) => {
+            mockInsertFn(table, data);
+            return Promise.resolve({ error: null });
+          }),
         };
       }
       if (table === 'stripe_payment_links') {
@@ -62,12 +81,12 @@ vi.mock('@/lib/supabase/service-role-client', () => ({
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
               maybeSingle: vi.fn(() => Promise.resolve({
-                data: { id: 'link-123', amount_centavos: 116050 },
+                data: mockPaymentLinkData,
               })),
             })),
           })),
           update: vi.fn(() => ({
-            eq: vi.fn(() => Promise.resolve({ error: null })),
+            eq: vi.fn(() => Promise.resolve({ error: mockPaymentLinkUpdateError })),
           })),
         };
       }
@@ -83,14 +102,24 @@ vi.mock('@/lib/supabase/service-role-client', () => ({
   })),
 }));
 
-vi.mock('@/lib/invoices/payment', () => ({
-  recordAndProcessPayment: vi.fn(() => Promise.resolve('payment-123')),
+vi.mock('@/lib/payments/service', () => ({
+  recordPayment: vi.fn(),
+  getInvoicePayments: vi.fn(),
+  calculateOutstandingBalance: vi.fn(),
+}));
+
+vi.mock('@/lib/invoices/record-payment', () => ({
+  recordAndProcessPayment: vi.fn(() => Promise.resolve({ payment: { id: 'payment-123' } })),
 }));
 
 describe('Stripe Webhooks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_123';
+    // Reset mock state
+    mockWebhookEventData = null;
+    mockPaymentLinkData = { id: 'link-123', amount_centavos: 116050 };
+    mockPaymentLinkUpdateError = null;
   });
 
   describe('verifyWebhookSignature', () => {
@@ -129,12 +158,7 @@ describe('Stripe Webhooks', () => {
     });
 
     it('should return true if event found', async () => {
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      vi.mocked(mockSupabase.from('stripe_webhook_events').select().eq).mockReturnValue({
-        maybeSingle: vi.fn(() => Promise.resolve({ data: { id: 'event-123' } })),
-      } as any);
-
+      mockWebhookEventData = { id: 'event-123' };
       const result = await isEventAlreadyProcessed('evt_existing_123');
       expect(result).toBe(true);
     });
@@ -151,9 +175,16 @@ describe('Stripe Webhooks', () => {
 
       await recordWebhookEvent(event, true);
 
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      expect(mockSupabase.from).toHaveBeenCalledWith('stripe_webhook_events');
+      expect(mockFromFn).toHaveBeenCalledWith('stripe_webhook_events');
+      expect(mockInsertFn).toHaveBeenCalledWith(
+        'stripe_webhook_events',
+        expect.objectContaining({
+          stripe_event_id: 'evt_123',
+          event_type: 'checkout.session.completed',
+          processed: true,
+          error_message: null,
+        })
+      );
     });
 
     it('should insert event record with processed=false and error', async () => {
@@ -166,9 +197,15 @@ describe('Stripe Webhooks', () => {
 
       await recordWebhookEvent(event, false, 'Test error');
 
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      expect(mockSupabase.from).toHaveBeenCalledWith('stripe_webhook_events');
+      expect(mockFromFn).toHaveBeenCalledWith('stripe_webhook_events');
+      expect(mockInsertFn).toHaveBeenCalledWith(
+        'stripe_webhook_events',
+        expect.objectContaining({
+          stripe_event_id: 'evt_123',
+          processed: false,
+          error_message: 'Test error',
+        })
+      );
     });
   });
 
@@ -208,7 +245,7 @@ describe('Stripe Webhooks', () => {
 
       await onCheckoutSessionCompleted(session);
 
-      const { recordAndProcessPayment } = await import('@/lib/invoices/payment');
+      const { recordAndProcessPayment } = await import('@/lib/invoices/record-payment');
       expect(recordAndProcessPayment).toHaveBeenCalled();
     });
   });
@@ -221,12 +258,12 @@ describe('Stripe Webhooks', () => {
 
       await onPaymentIntentFailed(paymentIntent);
 
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      expect(mockSupabase.from).toHaveBeenCalledWith('stripe_payment_links');
+      expect(mockFromFn).toHaveBeenCalledWith('stripe_payment_links');
     });
 
     it('should not throw if payment link not found', async () => {
+      mockPaymentLinkData = null;
+
       const paymentIntent = {
         id: 'pi_nonexistent',
       } as any;
@@ -254,7 +291,7 @@ describe('Stripe Webhooks', () => {
 
       await handleWebhookEvent(event);
 
-      const { recordAndProcessPayment } = await import('@/lib/invoices/payment');
+      const { recordAndProcessPayment } = await import('@/lib/invoices/record-payment');
       expect(recordAndProcessPayment).toHaveBeenCalled();
     });
 
@@ -270,9 +307,7 @@ describe('Stripe Webhooks', () => {
 
       await handleWebhookEvent(event);
 
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      expect(mockSupabase.from).toHaveBeenCalledWith('stripe_payment_links');
+      expect(mockFromFn).toHaveBeenCalledWith('stripe_payment_links');
     });
 
     it('should skip unhandled event types', async () => {

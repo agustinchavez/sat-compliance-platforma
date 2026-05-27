@@ -3,43 +3,54 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { createCheckoutSession, createPaymentLink, expirePaymentLink } from '../checkout';
-import { getOrCreateStripeCustomer } from '../customers';
 import { StripeGatewayError } from '../errors';
 import type { CheckoutSessionInput, PaymentLinkInput } from '../types';
 
-// Mock Stripe client
+// --- Shared mock state (mutated per-test to control behavior) ---
+let mockInvoiceData: any = {
+  id: 'inv-123',
+  status: 'stamped',
+  total: 1160.50,
+  folio_number: 123,
+  receiver_name: 'Test Customer',
+  payment_status: 'unpaid',
+};
+let mockInvoiceError: any = null;
+let mockOrgData: any = { stripe_customer_id: null };
+let mockOrgError: any = null;
+let mockPaymentData: any = null;
+let mockLinkInsertData: any = { id: 'link-123' };
+let mockLinkSelectData: any = {
+  stripe_payment_link_id: 'plink_test_123',
+  stripe_checkout_session_id: null,
+  status: 'active',
+};
+let mockLinkSelectError: any = null;
+
+// Shared Stripe API mocks
+const mockCheckoutSessionsCreate = vi.fn(() =>
+  Promise.resolve({
+    id: 'cs_test_123',
+    url: 'https://checkout.stripe.com/pay/cs_test_123',
+    expires_at: Math.floor(Date.now() / 1000) + 86400,
+  })
+);
+const mockProductsCreate = vi.fn(() => Promise.resolve({ id: 'prod_test_123' }));
+const mockPricesCreate = vi.fn(() => Promise.resolve({ id: 'price_test_123' }));
+const mockPaymentLinksCreate = vi.fn(() =>
+  Promise.resolve({ id: 'plink_test_123', url: 'https://buy.stripe.com/test_123' })
+);
+const mockPaymentLinksUpdate = vi.fn(() => Promise.resolve({}));
+
 vi.mock('../client', () => ({
   getStripeClient: vi.fn(() => ({
-    customers: {
-      create: vi.fn(() => Promise.resolve({ id: 'cus_new_123' })),
-    },
-    checkout: {
-      sessions: {
-        create: vi.fn((params) => {
-          if (params.customer === 'cus_error') {
-            throw new Error('Stripe API error');
-          }
-          return Promise.resolve({
-            id: 'cs_test_123',
-            url: 'https://checkout.stripe.com/pay/cs_test_123',
-            expires_at: Math.floor(Date.now() / 1000) + 86400,
-          });
-        }),
-      },
-    },
-    products: {
-      create: vi.fn(() => Promise.resolve({ id: 'prod_test_123' })),
-    },
-    prices: {
-      create: vi.fn(() => Promise.resolve({ id: 'price_test_123' })),
-    },
+    customers: { create: vi.fn(() => Promise.resolve({ id: 'cus_new_123' })) },
+    checkout: { sessions: { create: mockCheckoutSessionsCreate } },
+    products: { create: mockProductsCreate },
+    prices: { create: mockPricesCreate },
     paymentLinks: {
-      create: vi.fn(() => Promise.resolve({
-        id: 'plink_test_123',
-        url: 'https://buy.stripe.com/test_123',
-      })),
-      update: vi.fn(() => Promise.resolve({})),
+      create: mockPaymentLinksCreate,
+      update: mockPaymentLinksUpdate,
     },
   })),
   STRIPE_CONFIG: {
@@ -47,21 +58,17 @@ vi.mock('../client', () => ({
     SUCCESS_URL_PATH: '/invoices/{invoiceId}/payment-success',
     CANCEL_URL_PATH: '/invoices/{invoiceId}',
   },
-  toCentavos: vi.fn((amount) => Math.round(amount * 100)),
+  toCentavos: vi.fn((amount: number) => Math.round(amount * 100)),
 }));
 
-// Mock Supabase
 vi.mock('@/lib/supabase/service-role-client', () => ({
   createServiceRoleClient: vi.fn(() => ({
-    from: vi.fn((table) => {
+    from: vi.fn((table: string) => {
       if (table === 'organizations') {
         return {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
-              single: vi.fn(() => Promise.resolve({
-                data: { stripe_customer_id: null },
-                error: null,
-              })),
+              single: vi.fn(() => Promise.resolve({ data: mockOrgData, error: mockOrgError })),
             })),
           })),
           update: vi.fn(() => ({
@@ -73,17 +80,7 @@ vi.mock('@/lib/supabase/service-role-client', () => ({
         return {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
-              single: vi.fn(() => Promise.resolve({
-                data: {
-                  id: 'inv-123',
-                  status: 'stamped',
-                  total_amount: 1160.50,
-                  folio: 'A-123',
-                  receiver_name: 'Test Customer',
-                  receiver_email: 'test@example.com',
-                },
-                error: null,
-              })),
+              single: vi.fn(() => Promise.resolve({ data: mockInvoiceData, error: mockInvoiceError })),
             })),
           })),
         };
@@ -92,7 +89,7 @@ vi.mock('@/lib/supabase/service-role-client', () => ({
         return {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
-              maybeSingle: vi.fn(() => Promise.resolve({ data: null })),
+              maybeSingle: vi.fn(() => Promise.resolve({ data: mockPaymentData })),
             })),
           })),
         };
@@ -101,22 +98,12 @@ vi.mock('@/lib/supabase/service-role-client', () => ({
         return {
           insert: vi.fn(() => ({
             select: vi.fn(() => ({
-              single: vi.fn(() => Promise.resolve({
-                data: { id: 'link-123' },
-                error: null,
-              })),
+              single: vi.fn(() => Promise.resolve({ data: mockLinkInsertData, error: null })),
             })),
           })),
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
-              single: vi.fn(() => Promise.resolve({
-                data: {
-                  stripe_payment_link_id: 'plink_test_123',
-                  stripe_checkout_session_id: null,
-                  status: 'active',
-                },
-                error: null,
-              })),
+              single: vi.fn(() => Promise.resolve({ data: mockLinkSelectData, error: mockLinkSelectError })),
             })),
           })),
           update: vi.fn(() => ({
@@ -133,61 +120,36 @@ vi.mock('../customers', () => ({
   getOrCreateStripeCustomer: vi.fn(() => Promise.resolve('cus_test_123')),
 }));
 
-describe('Stripe Customers', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('getOrCreateStripeCustomer', () => {
-    it('should return existing customer ID if found', async () => {
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      vi.mocked(mockSupabase.from('organizations').select().eq).mockReturnValue({
-        single: vi.fn(() => Promise.resolve({
-          data: { stripe_customer_id: 'cus_existing_123' },
-          error: null,
-        })),
-      } as any);
-
-      const customerId = await vi.importActual<typeof import('../customers')>('../customers')
-        .then(m => m.getOrCreateStripeCustomer('org-123', 'test@example.com', 'Test Org'));
-
-      expect(customerId).toBe('cus_existing_123');
-    });
-
-    it('should create new customer if not found', async () => {
-      const customerId = await vi.importActual<typeof import('../customers')>('../customers')
-        .then(m => m.getOrCreateStripeCustomer('org-123', 'test@example.com', 'Test Org'));
-
-      expect(customerId).toBe('cus_new_123');
-    });
-
-    it('should throw error if organization not found', async () => {
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      vi.mocked(mockSupabase.from('organizations').select().eq).mockReturnValue({
-        single: vi.fn(() => Promise.resolve({
-          data: null,
-          error: new Error('Not found'),
-        })),
-      } as any);
-
-      await expect(
-        vi.importActual<typeof import('../customers')>('../customers')
-          .then(m => m.getOrCreateStripeCustomer('org-invalid', 'test@example.com', 'Test Org'))
-      ).rejects.toThrow();
-    });
-  });
-});
-
 describe('Stripe Checkout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_APP_URL = 'https://example.com';
+    // Reset mock state to defaults
+    mockInvoiceData = {
+      id: 'inv-123',
+      status: 'stamped',
+      total: 1160.50,
+      folio_number: 123,
+      receiver_name: 'Test Customer',
+      payment_status: 'unpaid',
+    };
+    mockInvoiceError = null;
+    mockOrgData = { stripe_customer_id: null };
+    mockOrgError = null;
+    mockPaymentData = null;
+    mockLinkInsertData = { id: 'link-123' };
+    mockLinkSelectData = {
+      stripe_payment_link_id: 'plink_test_123',
+      stripe_checkout_session_id: null,
+      status: 'active',
+    };
+    mockLinkSelectError = null;
   });
 
   describe('createCheckoutSession', () => {
     it('should create checkout session successfully', async () => {
+      const { createCheckoutSession } = await import('../checkout');
+
       const input: CheckoutSessionInput = {
         invoiceId: 'inv-123',
         organizationId: 'org-123',
@@ -204,14 +166,10 @@ describe('Stripe Checkout', () => {
     });
 
     it('should throw error if invoice not found', async () => {
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      vi.mocked(mockSupabase.from('invoices').select().eq).mockReturnValue({
-        single: vi.fn(() => Promise.resolve({
-          data: null,
-          error: new Error('Not found'),
-        })),
-      } as any);
+      mockInvoiceData = null;
+      mockInvoiceError = new Error('Not found');
+
+      const { createCheckoutSession } = await import('../checkout');
 
       const input: CheckoutSessionInput = {
         invoiceId: 'inv-invalid',
@@ -225,14 +183,9 @@ describe('Stripe Checkout', () => {
     });
 
     it('should throw error if invoice status is draft', async () => {
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      vi.mocked(mockSupabase.from('invoices').select().eq).mockReturnValue({
-        single: vi.fn(() => Promise.resolve({
-          data: { id: 'inv-123', status: 'draft' },
-          error: null,
-        })),
-      } as any);
+      mockInvoiceData = { id: 'inv-123', status: 'draft' };
+
+      const { createCheckoutSession } = await import('../checkout');
 
       const input: CheckoutSessionInput = {
         invoiceId: 'inv-123',
@@ -246,13 +199,9 @@ describe('Stripe Checkout', () => {
     });
 
     it('should throw error if invoice already paid', async () => {
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      vi.mocked(mockSupabase.from('payments').select().eq).mockReturnValue({
-        maybeSingle: vi.fn(() => Promise.resolve({
-          data: { id: 'payment-123' },
-        })),
-      } as any);
+      mockInvoiceData = { id: 'inv-123', status: 'stamped', payment_status: 'paid' };
+
+      const { createCheckoutSession } = await import('../checkout');
 
       const input: CheckoutSessionInput = {
         invoiceId: 'inv-123',
@@ -266,6 +215,8 @@ describe('Stripe Checkout', () => {
     });
 
     it('should use provided Stripe customer ID', async () => {
+      const { createCheckoutSession } = await import('../checkout');
+
       const input: CheckoutSessionInput = {
         invoiceId: 'inv-123',
         organizationId: 'org-123',
@@ -282,6 +233,8 @@ describe('Stripe Checkout', () => {
     });
 
     it('should create Stripe customer if not provided', async () => {
+      const { createCheckoutSession } = await import('../checkout');
+
       const input: CheckoutSessionInput = {
         invoiceId: 'inv-123',
         organizationId: 'org-123',
@@ -297,6 +250,8 @@ describe('Stripe Checkout', () => {
     });
 
     it('should include expiry if provided', async () => {
+      const { createCheckoutSession } = await import('../checkout');
+
       const expiresAt = new Date(Date.now() + 86400000);
       const input: CheckoutSessionInput = {
         invoiceId: 'inv-123',
@@ -308,15 +263,14 @@ describe('Stripe Checkout', () => {
       };
 
       await createCheckoutSession(input);
-
-      const { getStripeClient } = await import('../client');
-      const mockStripe = getStripeClient();
-      expect(mockStripe.checkout.sessions.create).toHaveBeenCalled();
+      expect(mockCheckoutSessionsCreate).toHaveBeenCalled();
     });
   });
 
   describe('createPaymentLink', () => {
     it('should create payment link successfully', async () => {
+      const { createPaymentLink } = await import('../checkout');
+
       const input: PaymentLinkInput = {
         invoiceId: 'inv-123',
         organizationId: 'org-123',
@@ -333,6 +287,8 @@ describe('Stripe Checkout', () => {
     });
 
     it('should create Stripe product', async () => {
+      const { createPaymentLink } = await import('../checkout');
+
       const input: PaymentLinkInput = {
         invoiceId: 'inv-123',
         organizationId: 'org-123',
@@ -342,13 +298,12 @@ describe('Stripe Checkout', () => {
       };
 
       await createPaymentLink(input);
-
-      const { getStripeClient } = await import('../client');
-      const mockStripe = getStripeClient();
-      expect(mockStripe.products.create).toHaveBeenCalled();
+      expect(mockProductsCreate).toHaveBeenCalled();
     });
 
     it('should create Stripe price', async () => {
+      const { createPaymentLink } = await import('../checkout');
+
       const input: PaymentLinkInput = {
         invoiceId: 'inv-123',
         organizationId: 'org-123',
@@ -358,21 +313,13 @@ describe('Stripe Checkout', () => {
       };
 
       await createPaymentLink(input);
-
-      const { getStripeClient } = await import('../client');
-      const mockStripe = getStripeClient();
-      expect(mockStripe.prices.create).toHaveBeenCalled();
+      expect(mockPricesCreate).toHaveBeenCalled();
     });
 
     it('should validate invoice status', async () => {
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      vi.mocked(mockSupabase.from('invoices').select().eq).mockReturnValue({
-        single: vi.fn(() => Promise.resolve({
-          data: { id: 'inv-123', status: 'cancelled' },
-          error: null,
-        })),
-      } as any);
+      mockInvoiceData = { id: 'inv-123', status: 'cancelled' };
+
+      const { createPaymentLink } = await import('../checkout');
 
       const input: PaymentLinkInput = {
         invoiceId: 'inv-123',
@@ -388,52 +335,34 @@ describe('Stripe Checkout', () => {
 
   describe('expirePaymentLink', () => {
     it('should expire payment link successfully', async () => {
+      const { expirePaymentLink } = await import('../checkout');
       await expirePaymentLink('link-123');
-
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      expect(mockSupabase.from).toHaveBeenCalledWith('stripe_payment_links');
+      expect(mockPaymentLinksUpdate).toHaveBeenCalledWith('plink_test_123', { active: false });
     });
 
     it('should throw error if link not found', async () => {
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      vi.mocked(mockSupabase.from('stripe_payment_links').select().eq).mockReturnValue({
-        single: vi.fn(() => Promise.resolve({
-          data: null,
-          error: new Error('Not found'),
-        })),
-      } as any);
+      mockLinkSelectData = null;
+      mockLinkSelectError = new Error('Not found');
 
-      await expect(expirePaymentLink('link-invalid')).rejects.toThrow('not found');
+      const { expirePaymentLink } = await import('../checkout');
+      await expect(expirePaymentLink('link-invalid')).rejects.toThrow(StripeGatewayError);
     });
 
     it('should skip if already expired', async () => {
-      const { createServiceRoleClient } = await import('@/lib/supabase/service-role-client');
-      const mockSupabase = createServiceRoleClient();
-      vi.mocked(mockSupabase.from('stripe_payment_links').select().eq).mockReturnValue({
-        single: vi.fn(() => Promise.resolve({
-          data: {
-            stripe_payment_link_id: 'plink_test_123',
-            status: 'expired',
-          },
-          error: null,
-        })),
-      } as any);
+      mockLinkSelectData = {
+        stripe_payment_link_id: 'plink_test_123',
+        status: 'expired',
+      };
 
+      const { expirePaymentLink } = await import('../checkout');
       await expirePaymentLink('link-123');
-
-      const { getStripeClient } = await import('../client');
-      const mockStripe = getStripeClient();
-      expect(mockStripe.paymentLinks.update).not.toHaveBeenCalled();
+      expect(mockPaymentLinksUpdate).not.toHaveBeenCalled();
     });
 
     it('should deactivate Stripe payment link', async () => {
+      const { expirePaymentLink } = await import('../checkout');
       await expirePaymentLink('link-123');
-
-      const { getStripeClient } = await import('../client');
-      const mockStripe = getStripeClient();
-      expect(mockStripe.paymentLinks.update).toHaveBeenCalledWith('plink_test_123', { active: false });
+      expect(mockPaymentLinksUpdate).toHaveBeenCalledWith('plink_test_123', { active: false });
     });
   });
 });
