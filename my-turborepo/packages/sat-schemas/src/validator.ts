@@ -78,12 +78,15 @@ async function validateWithXmllint(
   const { tmpdir } = await import('node:os');
 
   const xsdPath = getXsdPath(schemaType);
+  // Directory containing XSD files — used by --path to resolve xs:import locally
+  const xsdDir = xsdPath.substring(0, xsdPath.lastIndexOf('/'));
   const tempDir = mkdtempSync(join(tmpdir(), 'sat-xsd-'));
   const xmlPath = join(tempDir, 'document.xml');
 
   try {
     writeFileSync(xmlPath, xml, 'utf-8');
-    execSync(`xmllint --schema "${xsdPath}" --noout "${xmlPath}" 2>&1`, {
+    // --path tells xmllint to resolve imported schemas from local XSD dir
+    execSync(`xmllint --schema "${xsdPath}" --path "${xsdDir}" --noout "${xmlPath}" 2>&1`, {
       encoding: 'utf-8',
       timeout: 10000,
     });

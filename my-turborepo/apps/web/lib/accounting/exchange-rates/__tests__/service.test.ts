@@ -68,18 +68,9 @@ describe('resolveExchangeRate', () => {
   });
 
   it('should use Banxico FIX as tier 3 when no CFDI or manual rate', async () => {
-    // First call (for manual check) returns banxico_fix rate
-    mockGetCachedRate.mockResolvedValueOnce({
-      id: 'rate-2',
-      currencyFrom: 'USD',
-      currencyTo: 'MXN',
-      rateDate: '2026-01-14',
-      rate: 17.3456,
-      source: 'banxico_fix',
-      sourceReference: 'Banxico SIE SF43718',
-      createdAt: '2026-01-14',
-    });
-    // Second call returns same (Banxico)
+    // First call (manual filter) returns null — no org-specific manual rate
+    mockGetCachedRate.mockResolvedValueOnce(null);
+    // Second call (banxico_fix filter) returns the cached Banxico rate
     mockGetCachedRate.mockResolvedValueOnce({
       id: 'rate-2',
       currencyFrom: 'USD',
@@ -97,9 +88,21 @@ describe('resolveExchangeRate', () => {
     );
     expect(result.rate).toBe(17.3456);
     expect(result.source).toBe('banxico_fix');
+
+    // Verify source-filtered calls
+    expect(mockGetCachedRate).toHaveBeenCalledTimes(2);
+    expect(mockGetCachedRate).toHaveBeenNthCalledWith(
+      1, 'USD', 'MXN', '2026-01-15', mockSupabase,
+      { source: 'manual', organizationId: 'org-1' }
+    );
+    expect(mockGetCachedRate).toHaveBeenNthCalledWith(
+      2, 'USD', 'MXN', '2026-01-15', mockSupabase,
+      { source: 'banxico_fix' }
+    );
   });
 
   it('should throw when no rate available at any tier', async () => {
+    // Both source-filtered calls return null
     mockGetCachedRate.mockResolvedValue(null);
 
     await expect(

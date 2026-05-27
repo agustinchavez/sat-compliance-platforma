@@ -59,8 +59,11 @@ export async function resolveExchangeRate(
   }
 
   // Tier 2: Manual org-specific rate
-  const manualRate = await getCachedRate(currencyFrom, currencyTo, date, supabase);
-  if (manualRate && manualRate.source === 'manual' && manualRate.organizationId === organizationId) {
+  const manualRate = await getCachedRate(currencyFrom, currencyTo, date, supabase, {
+    source: 'manual',
+    organizationId,
+  });
+  if (manualRate) {
     return {
       rate: manualRate.rate,
       source: 'manual',
@@ -68,8 +71,10 @@ export async function resolveExchangeRate(
     };
   }
 
-  // Tier 3: Banxico FIX (from cache)
-  const banxicoRate = await getCachedRate(currencyFrom, currencyTo, date, supabase);
+  // Tier 3: Banxico FIX (from cache — shared, no org filter)
+  const banxicoRate = await getCachedRate(currencyFrom, currencyTo, date, supabase, {
+    source: 'banxico_fix',
+  });
   if (banxicoRate) {
     return {
       rate: banxicoRate.rate,

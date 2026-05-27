@@ -23,6 +23,28 @@ vi.mock('../service', () => ({
   }),
 }));
 
+// FIX-3.1: Mock exchange rate resolution — falls through to caller rate
+vi.mock('../../exchange-rates/service', () => ({
+  resolveExchangeRate: vi.fn(async (options: any) => {
+    if (options.currencyFrom === options.currencyTo || options.currencyFrom === 'MXN') {
+      return { rate: 1.0, source: 'cfdi' };
+    }
+    if (options.cfdiRate && options.cfdiRate > 0) {
+      return { rate: options.cfdiRate, source: 'cfdi' };
+    }
+    throw new Error('No rate found');
+  }),
+}));
+
+// FIX-3.2: Mock posting rules engine — returns empty lines to trigger fallback
+vi.mock('../../posting-rules/engine', () => ({
+  resolveAndBuildLines: vi.fn(async () => ({
+    lines: [],
+    ruleSource: 'system_default',
+    ruleName: 'none',
+  })),
+}));
+
 import { autoPostFromInvoice, autoPostFromPayment, autoPostFromExpense } from '../auto-posting';
 
 describe('Auto-Posting', () => {

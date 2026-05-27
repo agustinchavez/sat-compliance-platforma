@@ -66,22 +66,13 @@ export async function calculateAccountBalance(
     snapshotEndDate = (snapshotRow as any).tax_periods?.end_date ?? null;
   }
 
-  // Get delta from posted journal entry lines after snapshot
+  // FIX-3.3: Get delta from posted journal entry lines after snapshot,
+  // pushing the date filter to the DB instead of filtering in-memory.
   let deltaQuery = supabase
-    .from('journal_entry_lines')
-    .select('debit, credit')
-    .eq('organization_id', organizationId)
-    .eq('account_id', accountId);
-
-  // Only posted entries
-  // We need to join with journal_entries for status and date filtering
-  // Using a workaround since Supabase doesn't easily do joins in select
-  const { data: entryLines } = await supabase
     .from('journal_entry_lines')
     .select(`
       debit,
       credit,
-      journal_entry_id,
       journal_entries!inner(status, entry_date)
     `)
     .eq('organization_id', organizationId)
@@ -89,13 +80,17 @@ export async function calculateAccountBalance(
     .eq('journal_entries.status', 'posted')
     .lte('journal_entries.entry_date', asOfDate);
 
+  // Exclude lines already included in the sealed snapshot
+  if (snapshotEndDate) {
+    deltaQuery = deltaQuery.gt('journal_entries.entry_date', snapshotEndDate);
+  }
+
+  const { data: entryLines } = await deltaQuery;
+
   let totalDebit = 0;
   let totalCredit = 0;
 
   for (const line of (entryLines || [])) {
-    const entryDate = (line as any).journal_entries?.entry_date;
-    // Skip lines already included in snapshot
-    if (snapshotEndDate && entryDate <= snapshotEndDate) continue;
     totalDebit += parseFloat(line.debit ?? '0');
     totalCredit += parseFloat(line.credit ?? '0');
   }

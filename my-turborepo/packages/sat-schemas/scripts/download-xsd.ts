@@ -14,6 +14,10 @@ const __dirname = dirname(__filename);
 const XSD_DIR = resolve(__dirname, '..', 'xsd', 'contabilidade', '1_3');
 
 const XSD_URLS: Record<string, string> = {
+  // Shared catalog types (c_CodAgrup, c_Banco, c_Moneda, c_MetPagos)
+  // Must be downloaded first — imported by CatalogoCuentas and PolizasPeriodo XSDs
+  'CatalogosParaEsqContE.xsd':
+    'http://www.sat.gob.mx/esquemas/ContabilidadE/1_3/CatalogosParaEsqContE/CatalogosParaEsqContE.xsd',
   'CatalogoCuentas_1_3.xsd':
     'http://www.sat.gob.mx/esquemas/ContabilidadE/1_3/CatalogoCuentas/CatalogoCuentas_1_3.xsd',
   'BalanzaComprobacion_1_3.xsd':

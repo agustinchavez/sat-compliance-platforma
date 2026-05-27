@@ -15,16 +15,26 @@ export async function getCachedRate(
   currencyFrom: string,
   currencyTo: string,
   date: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  options?: { source?: RateSource; organizationId?: string }
 ): Promise<ExchangeRate | null> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('exchange_rates')
     .select('*')
     .eq('currency_from', currencyFrom)
     .eq('currency_to', currencyTo)
-    .lte('rate_date', date)
+    .lte('rate_date', date);
+
+  if (options?.source) {
+    query = query.eq('source', options.source);
+  }
+  if (options?.organizationId) {
+    query = query.eq('organization_id', options.organizationId);
+  }
+
+  const { data, error } = await query
     .order('rate_date', { ascending: false })
-    .order('source', { ascending: true }) // cfdi < banxico_fix < dof < manual (enum order)
+    .order('source', { ascending: true })
     .limit(1)
     .maybeSingle();
 
